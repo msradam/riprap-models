@@ -110,7 +110,6 @@ def _build_chip(cat, lon: float, lat: float, s2_window: str, s1_window: str, max
     import rasterio
     from rasterio.transform import from_origin
     from rasterio.warp import transform as rio_transform
-    from rasterio.windows import from_bounds
 
     # ---- pick 4 cloud-free S2 scenes spread across the window
     s2_search = cat.search(
