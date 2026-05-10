@@ -1,37 +1,45 @@
 # Granite TTM r2 Battery Surge held-out config.
 #
 # Each window is one held-out storm or calm period at NOAA station 8518750
-# (The Battery, NY). The fine-tune ingests the prior history_* range and is
-# scored on its forecast over the target_* range. All dates are YYYYMMDD GMT.
+# (The Battery, NY). The fine-tune ingests the prior history_* range
+# (1024 hours = ~43 days) and is scored on its forecast over the
+# target_* range (96 hours = 4 days). All dates are YYYYMMDD GMT.
 #
-# These windows are deliberately constructed to NOT overlap any window the
-# fine-tune was trained on. See docs/PROVENANCE.md for the construction rule.
+# The fine-tune was trained on hourly-resampled surge residual; we
+# fetch 6-min CO-OPS data and average into hourly buckets to match.
+#
+# Construction rule: each window is selected from outside the published
+# training range (2015-01-01 to 2024-12-31). The 2024 windows below are
+# in the last weeks of the test split (the model card uses 2023-2024 as
+# the test split), and the 2026 windows are outside the training range
+# entirely. See docs/PROVENANCE.md.
 
 model_id: msradam/Granite-TTM-r2-Battery-Surge
 model_revision: null
 
 station: "8518750"
 
-# 6-min cadence: 96 steps = 9.6 h horizon. Matches riprap-nyc/app/live/ttm_forecast.py.
-context_steps: 512
+# Hourly cadence to match the fine-tune training cadence.
+context_steps: 1024
 horizon_steps: 96
 
 holdout_windows:
-  # A nor'easter, 17–19 Dec 2024.
-  - label: "noreaster_2024_12_18"
-    history_start: "20241215"
+  # Late-Dec 2024 nor'easter (test-split tail).
+  - label: "noreaster_2024_12"
+    history_start: "20241101"
     history_end: "20241218"
     target_start: "20241218"
-    target_end: "20241219"
-  # Calm fair-weather window, mid-September 2024.
-  - label: "calm_2024_09_15"
-    history_start: "20240912"
-    history_end: "20240915"
-    target_start: "20240915"
-    target_end: "20240916"
-  # Hurricane Ida remnants, 1–2 Sep 2021.
-  - label: "ida_remnants_2021_09_02"
-    history_start: "20210830"
-    history_end: "20210902"
-    target_start: "20210902"
-    target_end: "20210903"
+    target_end: "20241222"
+  # Early Feb 2026 (post-training-cutoff). A nor'easter / cold-air outbreak
+  # window outside any training data.
+  - label: "feb_2026_post_training"
+    history_start: "20251220"
+    history_end: "20260205"
+    target_start: "20260205"
+    target_end: "20260209"
+  # Apr-May 2026 fair-weather control (also post-training).
+  - label: "may_2026_calm_post_training"
+    history_start: "20260315"
+    history_end: "20260501"
+    target_start: "20260501"
+    target_end: "20260505"

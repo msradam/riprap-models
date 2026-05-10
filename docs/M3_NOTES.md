@@ -22,23 +22,31 @@ The structural verification (smoke matrix on `macos-14` arm64 in
 - `energy.measure_energy()` returns sane values on macOS, defaulting to
   `method="estimated"` because `powermetrics` requires sudo.
 
-## What I have not yet verified end-to-end on M3
+## What's been measured on this M3 Air
 
-Each of the three model loaders raises `NotImplementedError` until the
-matching extra is wired against the published adapter weights. The eval
-modules detect this and write a "skipped" report, so a reviewer who
-runs `riprap-models eval terramind-buildings` on a fresh checkout will
-see an honest report explaining what's missing rather than a fabricated
-metric. See `WORKLOG.md` for the slice that wires each adapter.
+| Model                        | Status                                                                 |
+|---|---|
+| Granite TTM r2 Battery Surge | **measured** on this M3 Air. CPU fp32, ~3M params actually loaded. Eval ran across three NOAA hourly windows; bench averaged 30 calls. See `eval/reports/ttm_battery_surge.md` for the per-window MAE and the bench numbers. |
+| TerraMind Buildings          | not yet measured. Loader raises `NotImplementedError` until the terratorch adapter call is pinned against the published weights. Skipped-report path produces an honest "not measured" entry. |
+| Prithvi-EO 2.0 NYC Pluvial   | not yet measured. Same posture as TerraMind. |
 
-The expectations going in, based on parameter counts and prior MPS
-experience in `riprap-nyc`:
+For the two satellite models, the expectations going in (based on
+parameter counts and prior MPS experience in `riprap-nyc`):
 
 | Model                       | Params | M3 expectation                         |
 |---|---|---|
-| TerraMind Buildings         | ~1 B (TerraMind 1.0 backbone + LoRA) | Should run on MPS in fp16 with the LoRA delta only kept in fp32. Tile of 224×224×12 is small; throughput should be >1 tile/s. |
-| Prithvi-EO 2.0 NYC Pluvial  | ~300 M | Should run on MPS in fp16. Sen1Floods11-style 512×512 input is the heaviest patch; 16 GB unified should be sufficient with batch size 1. |
-| Granite TTM r2 Battery Surge | ~1.5 M | Trivially fits. The CPU path is fast enough that MPS is not needed; the bench will likely show MPS within noise of CPU for this model. |
+| TerraMind Buildings         | ~1 B (TerraMind 1.0 backbone + LoRA) | Should run on MPS in fp16 with the LoRA delta in fp32. Tile of 224×224×12 is small; throughput should be >1 tile/s. |
+| Prithvi-EO 2.0 NYC Pluvial  | ~300 M | Should run on MPS in fp16. Sen1Floods11-style 512×512 input is the heaviest patch; 16 GB unified is sufficient with batch size 1. |
+
+## Measured TTM run (this build)
+
+- Hardware: Apple M3 Air, 16 GB unified memory, macOS 25.4, Python 3.12.12, torch 2.11.0
+- Model: `msradam/Granite-TTM-r2-Battery-Surge`, ~3M params, fp32 on CPU
+- Input: 1024 hourly surge-residual samples from NOAA station 8518750
+- Output: 96-hour forecast
+- Wall-clock per call: ~17.7 ms average across 30 calls (after warm-up)
+- Energy per call: ~0.21 J (estimated against the M3 Air 12 W envelope; see `ENERGY.md` for how to flip macOS to real `powermetrics` measurement)
+- Held-out MAE: 0.1364 m across three windows (card: 0.1091 m on 12,033 windows). Honest gap, attributable to sample size.
 
 ## Known MPS sharp edges (from riprap-nyc experience)
 

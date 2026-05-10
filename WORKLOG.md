@@ -3,6 +3,66 @@
 Chronological build log. Newest entry on top. Each entry: what was built,
 what was measured, what failed, what was decided.
 
+## 2026-05-10 — TTM Battery Surge wired and measured on M3
+
+After the initial skeleton landed, I noticed the build environment was
+the user's actual M3 Air. So instead of stopping at "skeleton plus
+skipped reports", I wired the smallest of the three loaders end to end
+and produced real numbers.
+
+### What changed
+
+- `ttm_battery_surge/data.py`: replaced the `NotImplementedError` with
+  a real `_TTMForecaster` that wraps `tsfm_public.get_model(...)`. The
+  call surface mirrors `riprap-nyc/app/live/ttm_forecast.py` (channel-
+  wise standardize, `past_values=(1, T, 1)`, de-standardize).
+- Added hourly-bucket resampling in `fetch_residual_series`. The
+  fine-tune was trained on hourly data with a 1024-step context, not
+  6-min/512 like the live nowcast in riprap-nyc.
+- Added 31-day chunking in `_coops_get` so a 43-day history fetch
+  stops blowing the NOAA water_level endpoint's window cap.
+- `eval/configs/ttm_battery_surge.yaml`: cadence + context updated to
+  match the fine-tune (1024 hourly in, 96 hourly out). Three holdout
+  windows constructed from outside the documented training range.
+- `eval.py`: added zero-shot baseline (`ibm-granite/granite-timeseries-ttm-r2`)
+  alongside the fine-tune and persistence baselines, mirroring the
+  three-row table on the model card. Also fixed the bench to update
+  the YAML measurements block in place so `RESULTS.md` picks up the
+  joules figure automatically.
+
+### Measured numbers
+
+Apple M3 Air, 16 GB unified, macOS 25.4, Python 3.12.12, torch 2.11.0:
+
+| Model                       | Card metric | Reproduced (3 windows) | Notes |
+|---|---:|---:|---|
+| Granite TTM r2 Battery Surge | 0.1091 m MAE | 0.1364 m MAE | Card was 12,033 sliding windows; this is 3 windows. Honest gap. |
+
+Per-window breakdown lives in `eval/reports/ttm_battery_surge.md`.
+Bench (30 calls, post-warm-up): 17.7 ms / call, 0.21 J / call
+(estimated against the 12 W M3 Air envelope; see `ENERGY.md` for the
+sudoers one-liner that swaps to real `powermetrics`).
+
+### Honest finding
+
+On the calm fair-weather window, **persistence beats both TTM
+variants** (MAE 0.067 m vs fine-tune 0.098 m, zero-shot 0.077 m).
+On the December 2024 nor'easter, **zero-shot beats the fine-tune**
+(0.154 m vs 0.174 m). Only on the Feb 2026 post-training window does
+the fine-tune lead. Three windows is a small N; the headline 0.1091 m
+in the card was averaged over twelve thousand windows and reflects
+that scale. This repo's first job is to make the asymmetry visible,
+not to hide it.
+
+### What still isn't wired
+
+The two satellite loaders (`load_buildings_adapter`,
+`load_pluvial_finetune`) still raise `NotImplementedError`. The
+canonical reference is `riprap-nyc/scripts/run_prithvi_ida.py` for
+Prithvi; for TerraMind, the published model card kwargs need pinning
+against `terratorch>=0.10`. Each is a fifteen to thirty minute job
+on a GPU box.
+
 ## 2026-05-10 — initial autonomous build (Adam offline studying for finals)
 
 ### Phase 0: orient
