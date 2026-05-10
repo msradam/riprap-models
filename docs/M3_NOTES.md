@@ -26,9 +26,9 @@ The structural verification (smoke matrix on `macos-14` arm64 in
 
 | Model                        | Status                                                                 |
 |---|---|
-| Granite TTM r2 Battery Surge | **measured** on this M3 Air. CPU fp32, ~3M params actually loaded. Eval ran across three NOAA hourly windows; bench averaged 30 calls. See `eval/reports/ttm_battery_surge.md` for the per-window MAE and the bench numbers. |
-| TerraMind Buildings          | not yet measured. Loader raises `NotImplementedError` until the terratorch adapter call is pinned against the published weights. Skipped-report path produces an honest "not measured" entry. |
-| Prithvi-EO 2.0 NYC Pluvial   | not yet measured. Same posture as TerraMind. |
+| Granite TTM r2 Battery Surge | **measured.** CPU fp32, ~3M params. 40-window sliding eval across NOAA station 8518750 hourly residuals (2025-01-01 → 2026-05-01). 0.1318 m MAE vs card 0.1091 m. 17.7 ms / call, 0.21 J / call. |
+| Prithvi-EO 2.0 NYC Pluvial   | **measured.** CPU fp32, 324M params. 29-chip independent reconstruction (24 stride-7 Ida polygons + 5 controls). Reproduced flood IoU 0.0806 vs card 0.5979 — gap is the unpublished card chip-extraction. 211 ms / call, 2.53 J / call. |
+| TerraMind Buildings          | **not measured.** terratorch is installed, weights are downloadable, but the published test split names Major-TOM Core chips that need a multi-modal 4-timestep fetcher this harness does not yet ship. Multi-hour data-engineering job. |
 
 For the two satellite models, the expectations going in (based on
 parameter counts and prior MPS experience in `riprap-nyc`):

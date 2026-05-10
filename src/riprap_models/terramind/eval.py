@@ -58,6 +58,33 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
         )
         return out
 
+    # Even with terratorch installed, the LoRA buildings adapter expects
+    # multi-modal 4-timestep input: S2L2A (12 bands × 4 dates) + S1RTC
+    # (2 bands × 4 dates) + DEM (1 band) at 224×224. The 32-chip test
+    # split published at the model repo names chips by Major-TOM tile ID
+    # (e.g. nyc_452U_625L_r0c0); reconstructing the actual rasters
+    # requires fetching matched S2 + S1 + DEM stacks for each chip from
+    # Major-TOM Core (a separate HF dataset that ships parent tiles, not
+    # named chips). The local riprap-nyc cache at
+    # experiments/05_terramind_nyc_finetune/data/chips/ contains only
+    # single-timestep Phase-5 chips, which the LoRA adapter rejects on
+    # input shape. Honest skip until multi-timestep chip extraction
+    # is in.
+    _write_skipped_report(
+        out,
+        reason=(
+            "loader runtime is installed (terratorch), but the 32-chip test "
+            "split listed at the model repo (buildings_nyc/splits/test.txt) "
+            "names Major-TOM Core chips like 'nyc_452U_625L_r0c0' that this "
+            "harness does not yet reconstruct. The adapter expects "
+            "S2L2A+S1RTC+DEM at 4 timesteps; the local riprap-nyc cache "
+            "ships single-timestep chips. The wire-up is one Major-TOM "
+            "fetcher away. See docs/M3_NOTES.md for the gap."
+        ),
+        cfg=cfg,
+    )
+    return out
+
     # Real eval path. Numbers are populated from the held-out tile loop.
     import numpy as np
     import torch  # noqa: F401

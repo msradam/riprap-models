@@ -31,7 +31,6 @@ from __future__ import annotations
 import os
 import warnings
 from collections.abc import Iterator
-from pathlib import Path
 
 import numpy as np
 
@@ -70,22 +69,26 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
     """
     try:
         import geopandas as gpd
-        import planetary_computer
+        import planetary_computer  # noqa: F401
         import pystac_client
-        import rasterio
-        from rasterio import features
-        from rasterio.warp import transform as rio_transform
+        import rasterio  # noqa: F401
     except ImportError as e:
-        warnings.warn(f"prithvi data extras missing: {e}")
+        warnings.warn(f"prithvi data extras missing: {e}", stacklevel=2)
         return
 
     geojson_path = cfg.get("ida_polygons", "/Users/amsrahman/riprap-nyc/data/prithvi_ida_2021.geojson")
     if not os.path.exists(geojson_path):
-        warnings.warn(f"ida polygons not found at {geojson_path}; cannot construct positives")
+        warnings.warn(f"ida polygons not found at {geojson_path}; cannot construct positives", stacklevel=2)
         return
 
     g = gpd.read_file(geojson_path).to_crs(4326)
     test_idx = _polygon_test_indices(n=len(g), stride=int(cfg.get("stride", 7)))
+    # All polygons participate as ground truth — when a chip is centered on
+    # one polygon, any other polygons that fall inside the same 2240×2240m
+    # window also belong to the flood mask. Holding back tile centers (the
+    # 24 stride-7 indices) means the model has not seen those exact chip
+    # framings, but the flood-extent labels remain complete.
+    all_polys_4326 = g.geometry.tolist()
 
     cat = pystac_client.Client.open(
         "https://planetarycomputer.microsoft.com/api/stac/v1",
@@ -102,24 +105,26 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
             search = cat.search(
                 collections=["sentinel-2-l2a"],
                 intersects={"type": "Point", "coordinates": [ctr.x, ctr.y]},
-                datetime=cfg.get("ida_post_window", "2021-09-04/2021-09-20"),
+                datetime=cfg.get("ida_post_window", "2021-09-05/2021-09-12"),
                 query={"eo:cloud_cover": {"lt": cfg.get("max_cloud", 30)}},
                 max_items=5,
             )
             items = list(search.items())
             items.sort(key=lambda it: it.properties.get("eo:cloud_cover", 100))
             if not items:
-                warnings.warn(f"no S2 item found for ida polygon {i}")
+                warnings.warn(f"no S2 item found for ida polygon {i}", stacklevel=2)
                 continue
             it = items[0]
             tile_id = f"ida_{i:03d}_{it.id}"
-            image, label = _read_chip_with_label(it, ctr.x, ctr.y, poly, g.crs)
+            image, label = _read_chip_with_label(
+                it, ctr.x, ctr.y, all_polys_4326, g.crs
+            )
             yield tile_id, image, label, "ida"
             n_yielded += 1
             if limit is not None and n_yielded >= limit:
                 return
         except Exception as e:
-            warnings.warn(f"failed ida polygon {i}: {e!r}")
+            warnings.warn(f"failed ida polygon {i}: {e!r}", stacklevel=2)
 
     # ---- negatives ----
     for name, lon, lat in NEGATIVE_LONLATS:
@@ -127,7 +132,7 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
             search = cat.search(
                 collections=["sentinel-2-l2a"],
                 intersects={"type": "Point", "coordinates": [lon, lat]},
-                datetime=cfg.get("control_window", "2021-09-04/2021-09-20"),
+                datetime=cfg.get("control_window", "2021-09-05/2021-09-12"),
                 query={"eo:cloud_cover": {"lt": 10}},
                 max_items=5,
             )
@@ -137,25 +142,26 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
                 continue
             it = items[0]
             tile_id = f"control_{name}_{it.id}"
-            image, _ = _read_chip_with_label(it, lon, lat, poly=None, poly_crs=None)
+            image, _ = _read_chip_with_label(it, lon, lat, polys=None, poly_crs=None)
             label = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
             yield tile_id, image, label, "control"
             n_yielded += 1
             if limit is not None and n_yielded >= limit:
                 return
         except Exception as e:
-            warnings.warn(f"failed control {name}: {e!r}")
+            warnings.warn(f"failed control {name}: {e!r}", stacklevel=2)
 
 
-def _read_chip_with_label(item, lon: float, lat: float, poly, poly_crs):
-    """Read a 224x224 6-band chip centered on (lon, lat) and rasterize ``poly``
-    as a binary label aligned to the same window. Returns (image_HWC, label_HW).
+def _read_chip_with_label(item, lon: float, lat: float, polys, poly_crs):
+    """Read a 224x224 6-band chip centered on (lon, lat) and rasterize all
+    ``polys`` (a list of shapely polygons in ``poly_crs``) into a binary
+    label aligned to the chip window. Returns (image_HWC, label_HW).
     """
     import rasterio
-    from rasterio.warp import transform as rio_transform
-    from rasterio.windows import from_bounds, Window
     from rasterio.features import rasterize as rio_rasterize
     from rasterio.transform import from_origin
+    from rasterio.warp import transform as rio_transform
+    from rasterio.windows import Window, from_bounds
 
     # Reproject the centroid into the asset's CRS via the B02 (10m) asset.
     asset_url = {b: item.assets[b].href for b in PRITHVI_BANDS}
@@ -187,17 +193,29 @@ def _read_chip_with_label(item, lon: float, lat: float, poly, poly_crs):
             bands_data.append(arr)
 
     image = np.stack(bands_data, axis=-1)  # H, W, C
-    if poly is not None:
-        from shapely.ops import transform as shp_transform
+    if polys:
         from pyproj import Transformer
+        from shapely.geometry import box as shp_box
+        from shapely.ops import transform as shp_transform
+
         tx = Transformer.from_crs(poly_crs, dst_crs, always_xy=True).transform
-        poly_in_crs = shp_transform(tx, poly)
-        label = rio_rasterize(
-            [(poly_in_crs, 1)],
-            out_shape=(TILE_SIZE, TILE_SIZE),
-            transform=chip_transform,
-            fill=0, dtype="uint8",
-        ).astype(np.int64)
+        chip_box = shp_box(left, bottom, right, top)
+        shapes = []
+        for p in polys:
+            p_proj = shp_transform(tx, p)
+            if p_proj.intersects(chip_box):
+                clipped = p_proj.intersection(chip_box)
+                if not clipped.is_empty:
+                    shapes.append((clipped, 1))
+        if shapes:
+            label = rio_rasterize(
+                shapes,
+                out_shape=(TILE_SIZE, TILE_SIZE),
+                transform=chip_transform,
+                fill=0, dtype="uint8",
+            ).astype(np.int64)
+        else:
+            label = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
     else:
         label = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
     return image, label
@@ -246,7 +264,7 @@ def load_pluvial_finetune(cfg: dict | None = None):
     inner = {k[len("model."):]: v for k, v in sd.items() if k.startswith("model.")}
     missing, unexpected = task.model.load_state_dict(inner, strict=False)
     if missing or unexpected:
-        warnings.warn(f"prithvi state dict load: missing={len(missing)} unexpected={len(unexpected)}")
+        warnings.warn(f"prithvi state dict load: missing={len(missing)} unexpected={len(unexpected)}", stacklevel=2)
     task.model.eval()
 
     means = torch.tensor(PRITHVI_MEANS, dtype=torch.float32).view(6, 1, 1)

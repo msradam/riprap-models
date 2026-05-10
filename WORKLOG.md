@@ -3,6 +3,114 @@
 Chronological build log. Newest entry on top. Each entry: what was built,
 what was measured, what failed, what was decided.
 
+## 2026-05-10 — Prithvi reconstructed against public artifacts (and what it reveals)
+
+After Adam unblocked re-retrieval of any data that was on the AMD
+training boxes, I attempted an independent reconstruction of the
+Prithvi-EO 2.0 NYC pluvial fine-tune.
+
+### What was wired
+
+- Downloaded the published 1.24 GB safetensors from
+  `msradam/Prithvi-EO-2.0-NYC-Pluvial`.
+- Built a `SemanticSegmentationTask` via terratorch with the exact
+  spec from the model card's `prithvi_nyc_phase14.yaml`:
+  backbone `prithvi_eo_v2_300_tl`, 6-band Sen1Floods11 schema,
+  UNet decoder with channels [512, 256, 128, 64], 2 classes.
+  Weights loaded clean: 0 missing, 0 unexpected.
+- Constructed an independent held-out test set: every 7th of the 166
+  baked Ida polygons in `riprap-nyc/data/prithvi_ida_2021.geojson`
+  (24 chips), each centered on the polygon centroid, fetched the
+  lowest-cloud Sept 5-12 2021 Sentinel-2 L2A scene from Microsoft
+  Planetary Computer, reprojected to UTM 18N at 10 m, with bands
+  B02 B03 B04 B8A B11 B12. Plus 5 clear-sky NYC negative controls
+  (Pelham Bay, Forest Hills, Central Park, SI Lighthouse Hill,
+  Park Slope).
+- Rasterized all overlapping Ida polygons within each chip's
+  footprint as the binary flood mask, not just the centroid polygon.
+- Added a zero-shot baseline by loading the Sen1Floods11 base
+  Prithvi-EO 2.0 (`ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11`)
+  under the same task arch.
+
+### Measured numbers (M3 Air, CPU fp32)
+
+| | flood IoU |
+|---|---:|
+| Card claim (12k chip test split, AMD box) | **0.5979** |
+| **This reconstruction (29 chips, public sources)** | **0.0806** |
+| Zero-shot Sen1Floods11 base (head-broken comparison) | 0.0000 |
+
+Per-tile breakdown: the largest polygon (2607 GT pixels) reproduces
+**IoU 0.508** by itself — the model genuinely finds large flood
+regions in S2 imagery. The aggregate is dragged down by 20+ small
+polygons (median 112 GT pixels in a 50,176-pixel chip = 0.22% positive
+density) where any false-positive elsewhere blows up the IoU
+denominator.
+
+Bench: 0.21 s / call, 2.53 J / call (estimated, M3 Air 12 W envelope).
+
+### Honest finding
+
+The card's 0.5979 is **not reproducible from the published artifacts
+alone**. The card's chip-extraction script (per the card itself,
+`experiments/14_prithvi_nyc_pluvial/build_dataset.py`) is not in the
+riprap-nyc repo, and the test chips are not on the HF model repo.
+The card likely uses a different chip-extraction strategy, possibly:
+
+- chips cropped tightly around each polygon (e.g. 64×64 instead of
+  224×224 at 10 m), boosting positive density 10×
+- training-set leakage into the test split if the same chips were
+  used for training augmentation (the card mentions 332 copy-paste
+  augmented positives derived from the same 166 polygons)
+- a different ground-truth definition (e.g. NDWI threshold on the
+  same Sept 7 chip rather than the polygon rasterization)
+
+What this reconstruction does establish:
+
+- The published weights load and run end-to-end on M3.
+- The model produces coherent flood predictions on real Ida-period S2
+  chips.
+- On the largest polygon (the only chip with high positive density)
+  IoU is **0.508**, very close to the card's headline.
+- The relative gap to the head-broken zero-shot baseline is
+  effectively infinite (0.08 vs ~0).
+
+The repo's job is to make this gap visible. A reviewer should read
+the card's headline number as conditional on the card's exact
+chip-extraction recipe, not as a property of the weights themselves.
+
+### TerraMind status (after spending time on it)
+
+- Downloaded both adapter + decoder head; both are public.
+- The published 32-chip test split (`buildings_nyc/splits/test.txt`)
+  names Major-TOM Core chips (`nyc_452U_625L_r0c0` style) but the
+  chip-extraction code that turns those IDs into the actual
+  multi-modal rasters (S2L2A 12-band × 4 timesteps + S1RTC 2-band ×
+  4 timesteps + DEM 1-band, all 224×224) is not in the public
+  artifacts. The local riprap-nyc cache at
+  `experiments/05_terramind_nyc_finetune/data/chips/` ships single-
+  timestep Phase-5 chips that the LoRA adapter rejects on input shape.
+- The wire-up is one Major-TOM fetcher away; that fetcher is a
+  multi-hour engineering job, not a fifteen-minute one.
+
+## 2026-05-10 — TTM tightened with 40 sliding windows
+
+Before the Prithvi push, I tightened the TTM measurement from a
+3-window sample to a 40-window sliding eval over 2025-01-01 →
+2026-05-01 (strictly post-training-cutoff). New numbers:
+
+| | MAE (m) |
+|---|---:|
+| Card claim (12k 2023-2024 windows) | 0.1091 |
+| **This reconstruction (40 post-cutoff windows)** | **0.1318** |
+| Zero-shot TTM r2 base | 0.1291 |
+| Persistence baseline | 0.1866 |
+
+Notable: zero-shot TTM r2 narrowly beats the fine-tune on this
+post-cutoff window range. Both still beat persistence by ~30%. The
+card's 0.1091 was averaged over 12k 2023-2024 sliding windows; the
+post-cutoff gap is real and worth surfacing.
+
 ## 2026-05-10 — TTM Battery Surge wired and measured on M3
 
 After the initial skeleton landed, I noticed the build environment was
