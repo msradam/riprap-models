@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# venv
+.venv/
+venv/
+
+# uv
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Model caches and downloads
+.cache/
+hf_cache/
+.hf_home/
+
+# Large rasters and intermediate captures (we commit reports + small fixtures only)
+*.tif
+*.tiff
+*.nc
+*.zarr/
+*.h5
+*.parquet
+
+# Logs
+*.log
+logs/

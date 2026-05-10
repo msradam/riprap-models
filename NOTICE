@@ -1,0 +1,15 @@
+riprap-models
+Copyright 2026 Adam Rahman
+
+This product includes software developed at NYU Tandon School of Engineering.
+
+The three model artifacts evaluated by this repository are published separately
+on the Hugging Face Hub under their own licenses:
+
+  msradam/TerraMind-NYC-Adapters         (Apache-2.0)
+  msradam/Prithvi-EO-2.0-NYC-Pluvial     (Apache-2.0)
+  msradam/Granite-TTM-r2-Battery-Surge   (Apache-2.0)
+
+The base models that those fine-tunes derive from are likewise Apache-2.0 /
+MIT, published by IBM Research and NASA-IMPACT. See each model card for
+full attribution.
