@@ -44,3 +44,6 @@ hf_cache/
 # Logs
 *.log
 logs/
+
+# uv lockfile is regenerated; commit if you want pinned, exclude if you want fluid.
+# We commit it so a reviewer gets the exact same install on a clean checkout.
