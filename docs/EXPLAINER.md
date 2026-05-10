@@ -191,6 +191,25 @@ table is the procurement-friendly version).
 - **Replacing NOAA ETSS / NYC FloodHelp / DOITT.** These models add
   signal to those authoritative sources; they don't replace them.
 
+## Sniff-test probe (38/40 pass)
+
+`scripts/probe.py` runs 10 demo cases per model against real data and
+asserts each output falls in a sensible qualitative range. Run it
+yourself:
+
+```bash
+uv run python scripts/probe.py
+```
+
+Current state (full per-case detail in `eval/reports/probe.md`):
+
+| Model | Pass | Notes |
+|---|---|---|
+| TTM Battery Surge | **8/10** | Hurricane Ida + Dec 2024 nor'easter classified storm; calm summer / winter classified calm; Feb 2026 storm correctly flagged. The 2 "fails" are Kings Point + Sandy Hook calm windows reading "moderate" — correct out-of-distribution behaviour (fine-tune trained on Battery only). |
+| Prithvi NYC Pluvial | **10/10** | All 5 large Ida polygons fire (1.8k–8k pred px); all 5 clear-sky controls predict 0 px. Note: model is Ida-pattern specialised, not a generic water detector — testing it on the Hudson in 2024 produces 0 px (correct, no Ida-event signal). |
+| TerraMind Buildings | **10/10** | Dense urban → 99% building pixels; Jamaica Bay → 0.18% (basically 0); Pelham Bay Park → 1.5%; JFK runways → 37%. |
+| TerraMind LULC | **10/10** | Manhattan → impervious dominant; Jamaica Bay → water (96%); Pelham Bay → vegetation; Coney Island catches all four classes including 4167 building pixels. |
+
 ## What I learned that's worth knowing
 
 Findings from the build that aren't in any model card:

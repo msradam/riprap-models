@@ -1,0 +1,511 @@
+[
+  {
+    "label": "hurricane_ida_2021",
+    "model": "ttm-battery-surge",
+    "expected": "storm",
+    "got_class": "storm",
+    "got_peak_m": 0.3591,
+    "pass": true,
+    "notes": "Ida arrived 2021-09-01 night",
+    "elapsed_s": 1.64
+  },
+  {
+    "label": "december_2024_noreaster",
+    "model": "ttm-battery-surge",
+    "expected": "storm",
+    "got_class": "storm",
+    "got_peak_m": 0.3389,
+    "pass": true,
+    "notes": "known nor'easter 2024-12-18",
+    "elapsed_s": 1.57
+  },
+  {
+    "label": "calm_summer_2025_july",
+    "model": "ttm-battery-surge",
+    "expected": "calm",
+    "got_class": "calm",
+    "got_peak_m": 0.1494,
+    "pass": true,
+    "notes": "fair-weather Atlantic",
+    "elapsed_s": 1.48
+  },
+  {
+    "label": "calm_winter_2025_feb",
+    "model": "ttm-battery-surge",
+    "expected": "calm",
+    "got_class": "calm",
+    "got_peak_m": 0.1291,
+    "pass": true,
+    "notes": "fair-weather midwinter",
+    "elapsed_s": 1.45
+  },
+  {
+    "label": "kings_point_calm_2025",
+    "model": "ttm-battery-surge",
+    "expected": "calm",
+    "got_class": "moderate",
+    "got_peak_m": 0.1779,
+    "pass": false,
+    "notes": "Long Island Sound, fair",
+    "elapsed_s": 1.31
+  },
+  {
+    "label": "sandy_hook_calm_2025",
+    "model": "ttm-battery-surge",
+    "expected": "calm",
+    "got_class": "moderate",
+    "got_peak_m": 0.1617,
+    "pass": false,
+    "notes": "NJ Bight, fair",
+    "elapsed_s": 1.57
+  },
+  {
+    "label": "battery_recent_30d",
+    "model": "ttm-battery-surge",
+    "expected": "any",
+    "got_class": "calm",
+    "got_peak_m": 0.096,
+    "pass": true,
+    "notes": "live last 30 days",
+    "elapsed_s": 1.19
+  },
+  {
+    "label": "kings_point_recent_30d",
+    "model": "ttm-battery-surge",
+    "expected": "any",
+    "got_class": "moderate",
+    "got_peak_m": 0.1771,
+    "pass": true,
+    "notes": "Kings Point live",
+    "elapsed_s": 1.12
+  },
+  {
+    "label": "battery_pre_storm_jan2026",
+    "model": "ttm-battery-surge",
+    "expected": "storm",
+    "got_class": "storm",
+    "got_peak_m": 0.3485,
+    "pass": true,
+    "notes": "Feb 2026 nor'easter window",
+    "elapsed_s": 2.78
+  },
+  {
+    "label": "battery_calm_april_2026",
+    "model": "ttm-battery-surge",
+    "expected": "calm",
+    "got_class": "calm",
+    "got_peak_m": 0.119,
+    "pass": true,
+    "notes": "spring fair-weather",
+    "elapsed_s": 1.24
+  },
+  {
+    "label": "ida_largest_si",
+    "model": "prithvi-pluvial",
+    "expected": "flood",
+    "pred_pixels": 4941,
+    "pred_pct": 9.85,
+    "pass": true,
+    "notes": "Staten Island \u2014 largest Ida polygon",
+    "elapsed_s": 5.06
+  },
+  {
+    "label": "ida_2nd_si",
+    "model": "prithvi-pluvial",
+    "expected": "flood",
+    "pred_pixels": 6592,
+    "pred_pct": 13.14,
+    "pass": true,
+    "notes": "Staten Island \u2014 2nd largest",
+    "elapsed_s": 1.76
+  },
+  {
+    "label": "ida_si_north",
+    "model": "prithvi-pluvial",
+    "expected": "flood",
+    "pred_pixels": 7981,
+    "pred_pct": 15.91,
+    "pass": true,
+    "notes": "Staten Island North \u2014 large polygon",
+    "elapsed_s": 2.0
+  },
+  {
+    "label": "ida_si_west",
+    "model": "prithvi-pluvial",
+    "expected": "flood",
+    "pred_pixels": 4234,
+    "pred_pct": 8.44,
+    "pass": true,
+    "notes": "Staten Island West \u2014 large polygon",
+    "elapsed_s": 0.85
+  },
+  {
+    "label": "ida_first_polygon",
+    "model": "prithvi-pluvial",
+    "expected": "flood",
+    "pred_pixels": 1843,
+    "pred_pct": 3.67,
+    "pass": true,
+    "notes": "Polygon 0 \u2014 Staten Island",
+    "elapsed_s": 2.08
+  },
+  {
+    "label": "manhattan_midtown_clear",
+    "model": "prithvi-pluvial",
+    "expected": "no-flood",
+    "pred_pixels": 0,
+    "pred_pct": 0.0,
+    "pass": true,
+    "notes": "dense urban, no Ida polygon",
+    "elapsed_s": 4.61
+  },
+  {
+    "label": "central_park_clear",
+    "model": "prithvi-pluvial",
+    "expected": "no-flood",
+    "pred_pixels": 0,
+    "pred_pct": 0.0,
+    "pass": true,
+    "notes": "Central Park, no flood",
+    "elapsed_s": 2.26
+  },
+  {
+    "label": "yankee_stadium_clear",
+    "model": "prithvi-pluvial",
+    "expected": "no-flood",
+    "pred_pixels": 0,
+    "pred_pct": 0.0,
+    "pass": true,
+    "notes": "stadium + parking",
+    "elapsed_s": 2.29
+  },
+  {
+    "label": "pelham_bay_clear",
+    "model": "prithvi-pluvial",
+    "expected": "no-flood",
+    "pred_pixels": 0,
+    "pred_pct": 0.0,
+    "pass": true,
+    "notes": "Bronx upland, no Ida",
+    "elapsed_s": 2.25
+  },
+  {
+    "label": "forest_hills_clear",
+    "model": "prithvi-pluvial",
+    "expected": "no-flood",
+    "pred_pixels": 0,
+    "pred_pct": 0.0,
+    "pass": true,
+    "notes": "Queens upland",
+    "elapsed_s": 3.04
+  },
+  {
+    "label": "manhattan_midtown",
+    "model": "terramind-buildings",
+    "expected": "many",
+    "pred_pixels": 49901,
+    "pred_pct": 99.45,
+    "pass": true,
+    "notes": "dense urban core",
+    "elapsed_s": 47.58,
+    "joules": 7.862
+  },
+  {
+    "label": "manhattan_midtown",
+    "model": "terramind-lulc",
+    "expected": [
+      "impervious",
+      "building"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 722,
+      "impervious": 49015,
+      "vegetation": 307,
+      "bare/cropland": 132,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "dense urban core",
+    "elapsed_s": 0.51,
+    "joules": 6.096
+  },
+  {
+    "label": "central_park",
+    "model": "terramind-buildings",
+    "expected": "few",
+    "pred_pixels": 29960,
+    "pred_pct": 59.71,
+    "pass": true,
+    "notes": "Manhattan park, mixed",
+    "elapsed_s": 35.02,
+    "joules": 6.135
+  },
+  {
+    "label": "central_park",
+    "model": "terramind-lulc",
+    "expected": [
+      "vegetation",
+      "impervious"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 4462,
+      "impervious": 29448,
+      "vegetation": 13703,
+      "bare/cropland": 2563,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "Manhattan park, mixed",
+    "elapsed_s": 0.51,
+    "joules": 6.066
+  },
+  {
+    "label": "jamaica_bay",
+    "model": "terramind-buildings",
+    "expected": "none",
+    "pred_pixels": 92,
+    "pred_pct": 0.18,
+    "pass": true,
+    "notes": "open water",
+    "elapsed_s": 27.94,
+    "joules": 6.781
+  },
+  {
+    "label": "jamaica_bay",
+    "model": "terramind-lulc",
+    "expected": [
+      "water"
+    ],
+    "predicted_dominant": "water",
+    "class_counts": {
+      "water": 48328,
+      "impervious": 554,
+      "vegetation": 1192,
+      "bare/cropland": 102,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "open water",
+    "elapsed_s": 0.51,
+    "joules": 6.147
+  },
+  {
+    "label": "jfk_airport_runways",
+    "model": "terramind-buildings",
+    "expected": "few",
+    "pred_pixels": 18537,
+    "pred_pct": 36.94,
+    "pass": true,
+    "notes": "runways = impervious",
+    "elapsed_s": 54.34,
+    "joules": 6.323
+  },
+  {
+    "label": "jfk_airport_runways",
+    "model": "terramind-lulc",
+    "expected": [
+      "impervious"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 3082,
+      "impervious": 45800,
+      "vegetation": 312,
+      "bare/cropland": 982,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "runways = impervious",
+    "elapsed_s": 0.5,
+    "joules": 6.036
+  },
+  {
+    "label": "pelham_bay_park",
+    "model": "terramind-buildings",
+    "expected": "few",
+    "pred_pixels": 736,
+    "pred_pct": 1.47,
+    "pass": true,
+    "notes": "Bronx park, marshland",
+    "elapsed_s": 28.9,
+    "joules": 6.39
+  },
+  {
+    "label": "pelham_bay_park",
+    "model": "terramind-lulc",
+    "expected": [
+      "vegetation",
+      "impervious"
+    ],
+    "predicted_dominant": "vegetation",
+    "class_counts": {
+      "water": 18499,
+      "impervious": 5769,
+      "vegetation": 18970,
+      "bare/cropland": 6938,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "Bronx park, marshland",
+    "elapsed_s": 0.51,
+    "joules": 6.087
+  },
+  {
+    "label": "brooklyn_industrial",
+    "model": "terramind-buildings",
+    "expected": "many",
+    "pred_pixels": 49292,
+    "pred_pct": 98.24,
+    "pass": true,
+    "notes": "dense industrial",
+    "elapsed_s": 50.71,
+    "joules": 6.112
+  },
+  {
+    "label": "brooklyn_industrial",
+    "model": "terramind-lulc",
+    "expected": [
+      "impervious",
+      "building"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 0,
+      "impervious": 49564,
+      "vegetation": 515,
+      "bare/cropland": 97,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "dense industrial",
+    "elapsed_s": 0.5,
+    "joules": 6.011
+  },
+  {
+    "label": "coney_island_beach",
+    "model": "terramind-buildings",
+    "expected": "many",
+    "pred_pixels": 33477,
+    "pred_pct": 66.72,
+    "pass": true,
+    "notes": "beach + boardwalk + dense residential",
+    "elapsed_s": 27.13,
+    "joules": 6.042
+  },
+  {
+    "label": "coney_island_beach",
+    "model": "terramind-lulc",
+    "expected": [
+      "water",
+      "impervious"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 15783,
+      "impervious": 29284,
+      "vegetation": 165,
+      "bare/cropland": 777,
+      "building": 4167
+    },
+    "pass": true,
+    "notes": "beach + boardwalk + dense residential",
+    "elapsed_s": 0.5,
+    "joules": 6.012
+  },
+  {
+    "label": "hudson_yards",
+    "model": "terramind-buildings",
+    "expected": "many",
+    "pred_pixels": 35560,
+    "pred_pct": 70.87,
+    "pass": true,
+    "notes": "dense Manhattan",
+    "elapsed_s": 31.27,
+    "joules": 6.512
+  },
+  {
+    "label": "hudson_yards",
+    "model": "terramind-lulc",
+    "expected": [
+      "impervious",
+      "building"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 12851,
+      "impervious": 36227,
+      "vegetation": 899,
+      "bare/cropland": 199,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "dense Manhattan",
+    "elapsed_s": 0.52,
+    "joules": 6.207
+  },
+  {
+    "label": "staten_island_greenbelt",
+    "model": "terramind-buildings",
+    "expected": "few",
+    "pred_pixels": 21652,
+    "pred_pct": 43.15,
+    "pass": true,
+    "notes": "SI park",
+    "elapsed_s": 34.54,
+    "joules": 6.019
+  },
+  {
+    "label": "staten_island_greenbelt",
+    "model": "terramind-lulc",
+    "expected": [
+      "vegetation",
+      "impervious"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 6,
+      "impervious": 22683,
+      "vegetation": 22539,
+      "bare/cropland": 4948,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "SI park",
+    "elapsed_s": 0.5,
+    "joules": 5.999
+  },
+  {
+    "label": "queens_residential",
+    "model": "terramind-buildings",
+    "expected": "many",
+    "pred_pixels": 42255,
+    "pred_pct": 84.21,
+    "pass": true,
+    "notes": "residential mix",
+    "elapsed_s": 42.13,
+    "joules": 6.027
+  },
+  {
+    "label": "queens_residential",
+    "model": "terramind-lulc",
+    "expected": [
+      "impervious",
+      "building",
+      "vegetation"
+    ],
+    "predicted_dominant": "impervious",
+    "class_counts": {
+      "water": 1902,
+      "impervious": 37139,
+      "vegetation": 10645,
+      "bare/cropland": 490,
+      "building": 0
+    },
+    "pass": true,
+    "notes": "residential mix",
+    "elapsed_s": 0.51,
+    "joules": 6.053
+  }
+]
