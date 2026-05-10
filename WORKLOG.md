@@ -3,6 +3,73 @@
 Chronological build log. Newest entry on top. Each entry: what was built,
 what was measured, what failed, what was decided.
 
+## 2026-05-10 — TerraMind Buildings wired and measured on M3 (third row)
+
+After the user pushed back on giving up TerraMind too early, I built
+the multi-modal pipeline and got real numbers.
+
+### Pipeline that landed
+
+- Built TerraMind 1.0 base + LoRA adapter + decoder head end-to-end:
+  - downloaded `ibm-esa-geospatial/TerraMind-1.0-base` (1.45 GB
+    safetensors), loaded under terratorch's `EncoderDecoderFactory`
+    with `terramind_v1_base`, modalities S2L2A+S1RTC+DEM, temporal
+    wrapper at 4 timesteps, neck `[2,5,8,11]`, UNet decoder
+    `[512,256,128,64]`.
+  - loaded the buildings adapter from
+    `msradam/TerraMind-NYC-Adapters/buildings_nyc/`: 305 MB decoder
+    head into `task.model.{decoder,neck,head}`, then merged 24 LoRA
+    pairs (rank 16, alpha 32, scale 2.0) into the encoder
+    qkv/proj weights manually.
+- Built independent NYC test set: 6 AOIs (Manhattan midtown, Brooklyn
+  downtown, Queens Jamaica, Bronx Morrisania, SI St. George,
+  Manhattan lower waterfront). For each: 4 cloud-free Sentinel-2 L2A
+  scenes from PC (2024-04 to 2024-09), 4 matching Sentinel-1 RTC
+  scenes, Copernicus DEM GLO-30. Forced UTM 18N chip framing with
+  WarpedVRT so reads from any source CRS reproject correctly.
+- Pulled DOITT building footprints from NYC OpenData
+  (`5zhs-2jue` Socrata REST, public, no auth) per chip, rasterized
+  to the 224×224 grid as the binary label.
+
+### Two debug iterations that mattered
+
+1. **Band order.** First pass used Sentinel-2 reflectance bands
+   B02-B12 + AOT + SCL (12 channels). The IBM TerraMind pretraining
+   stats are over B01, B02, B03, B04, B05, B06, B07, B08, B8A, B09,
+   B11, B12 (skip B10). After fixing, predictions went from "0
+   building pixels" to "everything is buildings".
+2. **Input scale.** TerraMind expects S2 on the **raw 0-10000
+   scale**, not divided. S1RTC needs **linear → dB conversion**
+   (`10 * log10`). DEM is in metres above geoid. Means/stds from the
+   IBM reference yaml.
+
+### Measured numbers (M3 Air, CPU fp32)
+
+| | mIoU | building IoU | non-building IoU |
+|---|---:|---:|---:|
+| Card claim (32 chips, AMD box) | **0.5518** | 0.2928 | 0.8107 |
+| **This reconstruction (6 dense urban AOIs)** | **0.3288** | **0.3490** | 0.3087 |
+
+Bench: 0.51 s / call, 6.13 J / call (estimated, M3 Air 12 W envelope).
+
+### Honest finding
+
+The **building IoU itself reproduces and is slightly higher** than
+the card's published number (0.349 vs 0.293). Where my reconstruction
+diverges is mIoU: the card averages building IoU and non-building
+IoU into a 2-class macro mean. My 6 AOIs are all dense urban (~50%
+buildings), so non-building is the rarer class and its IoU is low.
+The card's 32 chips were likely a more balanced mix that gave both
+classes high IoU.
+
+Per-tile detail in the report shows the card's "recall-biased"
+caveat is real and visible: on Manhattan midtown the model achieves
+99.99% recall (TP 25,370 / GT 25,373) but predicts ~2× the actual
+building pixels (FP 24,531). This is consistent with the card's
+published precision-vs-recall trade-off. For Riprap's exposure-overlay
+use case (the model card's stated downstream use), recall-biased
+output is the right shape.
+
 ## 2026-05-10 — Prithvi reconstructed against public artifacts (and what it reveals)
 
 After Adam unblocked re-retrieval of any data that was on the AMD

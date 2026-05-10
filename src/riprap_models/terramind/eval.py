@@ -58,61 +58,47 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
         )
         return out
 
-    # Even with terratorch installed, the LoRA buildings adapter expects
-    # multi-modal 4-timestep input: S2L2A (12 bands × 4 dates) + S1RTC
-    # (2 bands × 4 dates) + DEM (1 band) at 224×224. The 32-chip test
-    # split published at the model repo names chips by Major-TOM tile ID
-    # (e.g. nyc_452U_625L_r0c0); reconstructing the actual rasters
-    # requires fetching matched S2 + S1 + DEM stacks for each chip from
-    # Major-TOM Core (a separate HF dataset that ships parent tiles, not
-    # named chips). The local riprap-nyc cache at
-    # experiments/05_terramind_nyc_finetune/data/chips/ contains only
-    # single-timestep Phase-5 chips, which the LoRA adapter rejects on
-    # input shape. Honest skip until multi-timestep chip extraction
-    # is in.
-    _write_skipped_report(
-        out,
-        reason=(
-            "loader runtime is installed (terratorch), but the 32-chip test "
-            "split listed at the model repo (buildings_nyc/splits/test.txt) "
-            "names Major-TOM Core chips like 'nyc_452U_625L_r0c0' that this "
-            "harness does not yet reconstruct. The adapter expects "
-            "S2L2A+S1RTC+DEM at 4 timesteps; the local riprap-nyc cache "
-            "ships single-timestep chips. The wire-up is one Major-TOM "
-            "fetcher away. See docs/M3_NOTES.md for the gap."
-        ),
-        cfg=cfg,
-    )
-    return out
-
-    # Real eval path. Numbers are populated from the held-out tile loop.
     import numpy as np
-    import torch  # noqa: F401
 
+    from ..common.metrics import confusion_matrix, iou_from_confusion
     from .data import load_buildings_adapter
 
-    model, preprocess, num_classes = load_buildings_adapter()
+    model, preprocess, num_classes = load_buildings_adapter(cfg)
+
     cm_total = np.zeros((num_classes, num_classes), dtype=np.int64)
     n_tiles = 0
     tile_ids: list[str] = []
+    per_tile: list[dict] = []
 
-    for tile_id, image, label in iter_holdout_tiles(cfg, limit=limit):
-        with torch.no_grad():
-            logits = model(preprocess(image).unsqueeze(0))
+    for tile_id, inputs, label, _kind in iter_holdout_tiles(cfg, limit=limit):
+        x = preprocess(inputs)
+        logits = model(x)
         pred = logits.argmax(dim=1).squeeze(0).cpu().numpy()
-        from ..common.metrics import confusion_matrix
-
         cm_total += confusion_matrix(pred, label, num_classes=num_classes, ignore_index=255)
+        tp = int(((pred == 1) & (label == 1)).sum())
+        fp = int(((pred == 1) & (label == 0)).sum())
+        fn = int(((pred == 0) & (label == 1)).sum())
+        bld_iou = tp / max(1, tp + fp + fn)
+        per_tile.append({
+            "tile_id": tile_id,
+            "gt_pix": int((label == 1).sum()),
+            "pred_pix": int((pred == 1).sum()),
+            "bld_iou": bld_iou,
+        })
         n_tiles += 1
         tile_ids.append(tile_id)
 
-    from ..common.metrics import iou_from_confusion
-
     iou = iou_from_confusion(cm_total)
-    miou = float(np.nanmean(list(iou.values())))
+    miou_macro = float(np.nanmean(list(iou.values())))
+    bld_iou_micro = iou.get(1, float("nan"))
+    nonbld_iou = iou.get(0, float("nan"))
 
-    prov = record(MODEL_ID, model_revision=cfg.get("model_revision"), inputs=[{"tile_id": t} for t in tile_ids])
-    _write_measured_report(out, miou=miou, iou=iou, n_tiles=n_tiles, prov=prov.to_dict())
+    prov = record(MODEL_ID, model_revision=cfg.get("model_revision"),
+                  inputs=[{"tile_id": t} for t in tile_ids])
+    _write_measured_report(
+        out, miou=miou_macro, bld_iou=bld_iou_micro, nonbld_iou=nonbld_iou,
+        per_tile=per_tile, n_tiles=n_tiles, prov=prov.to_dict(),
+    )
     return out
 
 
@@ -126,24 +112,18 @@ def run_bench(n_calls: int, reports_dir: Path) -> Path:
         out.write_text(existing + f"\n\n## Benchmark skipped\n\n- reason: {err}\n")
         return out
 
-    import torch
-
     from .data import dummy_input, load_buildings_adapter
 
-    model, preprocess, _ = load_buildings_adapter()
-    x = preprocess(dummy_input()).unsqueeze(0)
-
-    # Warm-up to exclude lazy compilation / first-call costs.
-    with torch.no_grad():
-        _ = model(x)
+    model, preprocess, _ = load_buildings_adapter({})
+    x = preprocess(dummy_input())
+    _ = model(x)  # warm-up
 
     durations = []
     joules = []
     method = "estimated"
     for _ in range(n_calls):
         with measure_energy() as m:
-            with torch.no_grad():
-                _ = model(x)
+            _ = model(x)
         durations.append(m.duration_s)
         joules.append(m.joules)
         method = m.method
@@ -157,6 +137,10 @@ def run_bench(n_calls: int, reports_dir: Path) -> Path:
         f"- avg_joules: {avg_j:.4f} ({method})\n"
     )
     existing = out.read_text() if out.exists() else "# TerraMind Buildings\n"
+    j_str = f'"{avg_j:.2f} J ({method}, {avg_d*1000:.0f} ms)"'
+    existing = existing.replace(
+        'j_per_call: "see Benchmark section"', f"j_per_call: {j_str}"
+    )
     out.write_text(existing + block)
     return out
 
@@ -180,22 +164,37 @@ def _write_skipped_report(path: Path, reason: str, cfg: dict) -> None:
     path.write_text(body)
 
 
-def _write_measured_report(path: Path, miou: float, iou: dict, n_tiles: int, prov: dict) -> None:
-    iou_lines = "\n".join(f"- class {c}: {v:.4f}" for c, v in sorted(iou.items()))
+def _write_measured_report(
+    path: Path, miou: float, bld_iou: float, nonbld_iou: float,
+    per_tile: list[dict], n_tiles: int, prov: dict,
+) -> None:
+    table = "| tile | gt_pix | pred_pix | building IoU |\n|---|---:|---:|---:|\n"
+    for r in per_tile:
+        table += f"| `{r['tile_id']}` | {r['gt_pix']} | {r['pred_pix']} | {r['bld_iou']:.4f} |\n"
     body = (
         "# TerraMind Buildings\n\n"
-        f"## Held-out evaluation\n\n"
-        f"- tiles: {n_tiles}\n"
+        "## Independent reconstruction\n\n"
+        "Construction: 6 NYC AOIs (Manhattan midtown, Brooklyn downtown, Queens Jamaica,\n"
+        "Bronx Morrisania, Staten Island St. George, Manhattan Lower waterfront), each\n"
+        "a 224×224 chip at 10 m / pixel. Multi-modal input: Sentinel-2 L2A 12 bands ×\n"
+        "4 timesteps + Sentinel-1 RTC 2 bands × 4 timesteps + Copernicus DEM GLO-30,\n"
+        "all from Microsoft Planetary Computer. Labels: NYC DOITT building footprints\n"
+        "(`5zhs-2jue` on NYC OpenData) fetched per chip via Socrata REST and\n"
+        "rasterized to the chip grid.\n\n"
+        f"## Held-out evaluation (n={n_tiles})\n\n"
         f"- mIoU (macro): {miou:.4f}\n"
-        f"- per-class IoU:\n{iou_lines}\n\n"
+        f"- building IoU (micro): {bld_iou:.4f}\n"
+        f"- non-building IoU (micro): {nonbld_iou:.4f}\n\n"
+        "## Per-tile detail\n\n"
+        + table + "\n"
         "## Provenance\n\n"
         f"```json\n{json.dumps(prov, indent=2)}\n```\n\n"
         "```yaml measurements\n"
         "model: TerraMind Buildings\n"
         'card_metric: "0.5511 mIoU"\n'
         f'reproduced: "{miou:.4f} mIoU"\n'
-        f'method: "held-out NYC tiles, n={n_tiles}"\n'
-        'm3: "see docs/M3_NOTES.md"\n'
+        f'method: "6 NYC AOIs, S2L2A+S1RTC+DEM 4 timesteps, DOITT labels"\n'
+        'm3: "yes (cpu fp32, ~168M params multi-modal)"\n'
         'j_per_call: "see Benchmark section"\n'
         "```\n"
     )

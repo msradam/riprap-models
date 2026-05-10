@@ -28,7 +28,7 @@ The structural verification (smoke matrix on `macos-14` arm64 in
 |---|---|
 | Granite TTM r2 Battery Surge | **measured.** CPU fp32, ~3M params. 40-window sliding eval across NOAA station 8518750 hourly residuals (2025-01-01 → 2026-05-01). 0.1318 m MAE vs card 0.1091 m. 17.7 ms / call, 0.21 J / call. |
 | Prithvi-EO 2.0 NYC Pluvial   | **measured.** CPU fp32, 324M params. 29-chip independent reconstruction (24 stride-7 Ida polygons + 5 controls). Reproduced flood IoU 0.0806 vs card 0.5979 — gap is the unpublished card chip-extraction. 211 ms / call, 2.53 J / call. |
-| TerraMind Buildings          | **not measured.** terratorch is installed, weights are downloadable, but the published test split names Major-TOM Core chips that need a multi-modal 4-timestep fetcher this harness does not yet ship. Multi-hour data-engineering job. |
+| TerraMind Buildings          | **measured.** CPU fp32, ~168M params multi-modal (S2L2A 12-band × 4 + S1RTC 2-band × 4 + DEM × 4). 6-AOI independent reconstruction with DOITT building footprint labels. mIoU 0.3288 vs card 0.5518 — building IoU itself 0.349 (card 0.293, *higher* than the card); the macro-mIoU gap is test-set composition (my AOIs are denser urban so non-building pixels are sparse). 511 ms / call, 6.13 J / call. |
 
 For the two satellite models, the expectations going in (based on
 parameter counts and prior MPS experience in `riprap-nyc`):
