@@ -1,0 +1,37 @@
+# Granite TTM r2 Battery Surge held-out config.
+#
+# Each window is one held-out storm or calm period at NOAA station 8518750
+# (The Battery, NY). The fine-tune ingests the prior history_* range and is
+# scored on its forecast over the target_* range. All dates are YYYYMMDD GMT.
+#
+# These windows are deliberately constructed to NOT overlap any window the
+# fine-tune was trained on. See docs/PROVENANCE.md for the construction rule.
+
+model_id: msradam/Granite-TTM-r2-Battery-Surge
+model_revision: null
+
+station: "8518750"
+
+# 6-min cadence: 96 steps = 9.6 h horizon. Matches riprap-nyc/app/live/ttm_forecast.py.
+context_steps: 512
+horizon_steps: 96
+
+holdout_windows:
+  # A nor'easter, 17–19 Dec 2024.
+  - label: "noreaster_2024_12_18"
+    history_start: "20241215"
+    history_end: "20241218"
+    target_start: "20241218"
+    target_end: "20241219"
+  # Calm fair-weather window, mid-September 2024.
+  - label: "calm_2024_09_15"
+    history_start: "20240912"
+    history_end: "20240915"
+    target_start: "20240915"
+    target_end: "20240916"
+  # Hurricane Ida remnants, 1–2 Sep 2021.
+  - label: "ida_remnants_2021_09_02"
+    history_start: "20210830"
+    history_end: "20210902"
+    target_start: "20210902"
+    target_end: "20210903"
