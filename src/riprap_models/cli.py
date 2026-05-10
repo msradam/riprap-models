@@ -9,7 +9,7 @@ Subcommands:
   riprap-models report           regenerate docs/RESULTS.md from eval/reports/
   riprap-models device           print the detected device and dtype
 
-Model names: terramind-buildings, prithvi-pluvial, ttm-battery-surge.
+Model names: terramind-buildings, terramind-lulc, prithvi-pluvial, ttm-battery-surge.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import click
 
 from .device import get_device
 
-VALID_MODELS = ("terramind-buildings", "prithvi-pluvial", "ttm-battery-surge")
+VALID_MODELS = ("terramind-buildings", "terramind-lulc", "prithvi-pluvial", "ttm-battery-surge")
 REPORTS_DIR = Path("eval/reports")
 FIXTURES_DIR = Path("eval/fixtures")
 
@@ -45,6 +45,8 @@ def _dispatch_eval(name: str):
 
     if name == "terramind-buildings":
         return import_module("riprap_models.terramind.eval").run_eval
+    if name == "terramind-lulc":
+        return import_module("riprap_models.terramind.eval_lulc").run_eval
     if name == "prithvi-pluvial":
         return import_module("riprap_models.prithvi_pluvial.eval").run_eval
     if name == "ttm-battery-surge":
@@ -57,6 +59,8 @@ def _dispatch_bench(name: str):
 
     if name == "terramind-buildings":
         return import_module("riprap_models.terramind.eval").run_bench
+    if name == "terramind-lulc":
+        return import_module("riprap_models.terramind.eval_lulc").run_bench
     if name == "prithvi-pluvial":
         return import_module("riprap_models.prithvi_pluvial.eval").run_bench
     if name == "ttm-battery-surge":

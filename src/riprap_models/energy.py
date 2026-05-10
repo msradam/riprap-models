@@ -1,29 +1,12 @@
 """Per-call energy measurement.
 
-Usage:
-
     with measure_energy() as m:
         run_inference(...)
     print(m.joules, m.duration_s, m.peak_memory_mb, m.method)
 
-The four supported methods, picked automatically by platform:
-
-  * ``nvml``         — NVIDIA GPU. Polls power draw via pynvml at ~50 Hz and
-                       integrates over wall time.
-  * ``rapl``         — Linux x86 CPU. Reads ``/sys/class/powercap/intel-rapl:0/energy_uj``
-                       before/after.
-  * ``powermetrics`` — macOS, opt-in only. Requires the calling user to be
-                       able to invoke ``powermetrics`` without an interactive
-                       sudo prompt (i.e. an entry in /etc/sudoers or running
-                       the CLI under sudo). When that condition holds, we
-                       sample CPU + GPU power for the duration of the block.
-  * ``estimated``    — Fallback. Multiplies wall-clock duration by a
-                       documented platform-typical power envelope. The
-                       envelope is conservative and the method field is set
-                       to "estimated" so a downstream report cannot mistake
-                       this for a measured value.
-
-The estimation envelopes are documented in ``docs/ENERGY.md`` with sources.
+Methods, auto-selected by platform: ``nvml`` (NVIDIA), ``rapl`` (Linux x86 CPU),
+``powermetrics`` (macOS, sudo without prompt required), ``estimated`` (fallback,
+duration × platform envelope; see ``docs/ENERGY.md``).
 """
 
 from __future__ import annotations

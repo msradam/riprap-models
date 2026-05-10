@@ -1,17 +1,7 @@
-"""TerraMind NYC adapters: held-out evaluation and benchmark.
+"""TerraMind buildings adapter: eval + bench.
 
-Three adapters live under ``msradam/TerraMind-NYC-Adapters``:
-
-  * Buildings (binary segmentation: building / not building)
-  * LULC      (Sentinel-2 land-cover, 9 classes)
-  * TiM       (Tile-in-Mosaic context probe, regression)
-
-The `Buildings` adapter is the smallest test set, so we evaluate it first
-per the build order in WORKLOG.md. The other two follow the same pattern.
-
-This module loads the adapter via terratorch when the ``terramind`` extra
-is installed. When it isn't (e.g. base CI smoke run), the eval functions
-write a status report flagging that the model wasn't evaluated and why.
+Card metric: 0.5511 mIoU / 0.2928 building IoU. Loads via terratorch.
+LULC adapter eval lives in ``eval_lulc.py``.
 """
 
 from __future__ import annotations

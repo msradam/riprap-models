@@ -1,9 +1,5 @@
-"""Provenance helpers.
-
-Every report this repo emits should include a provenance block with: tile
-IDs / station IDs, timestamps, data versions, and the SHA of the code that
-produced the report. ``record()`` returns a dict you can drop straight into
-a YAML or JSON sidecar.
+"""Provenance: ``record(model, revision, inputs)`` returns a dict with code SHA,
+platform, UTC timestamp; intended for inclusion in eval-report JSON sidecars.
 """
 
 from __future__ import annotations

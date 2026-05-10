@@ -1,16 +1,9 @@
-"""Live data fetch + freeze-to-fixture path.
+"""Live fetch + freeze-to-fixture + replay.
 
-For each model, ``run_live(name, fixtures_dir)`` fetches a fresh slice of
-public NYC data, runs inference on it, and writes:
-
-    eval/fixtures/<name>/<UTC-timestamp>/
-        inputs.<ext>          raw fetched data
-        outputs.<ext>          model output
-        manifest.json         provenance + replay metadata
-
-``replay(name, fixture_dir)`` loads the inputs and reruns inference,
-asserting bit-identical (or float-tolerant) outputs against what's saved.
-That gives a reviewer a reproducible run that doesn't require live network.
+``run_live(name, fixtures_dir)`` writes
+``eval/fixtures/<name>/<UTC-ts>/{inputs, outputs, manifest.json}``.
+``replay(name, fixture_dir)`` re-runs inference on the saved inputs and
+asserts float-tolerant equality with the saved outputs.
 """
 
 from __future__ import annotations
@@ -184,8 +177,6 @@ def _run_live_terramind(fixtures_dir: Path) -> Path:
             "code_sha": code_sha(),
         }, indent=2))
         return out
-    # Same fetch path as Prithvi; inference adapter differs.
-    # Kept intentionally short; the heavy lifting is in terramind/eval.py.
     (out / "manifest.json").write_text(json.dumps({
         "model": "msradam/TerraMind-NYC-Adapters",
         "status": "skipped_inference",

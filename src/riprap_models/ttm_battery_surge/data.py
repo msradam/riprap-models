@@ -1,15 +1,8 @@
-"""NOAA CO-OPS data loader for The Battery (station 8518750).
+"""NOAA CO-OPS loader for The Battery (8518750). Surge residual =
+``water_level`` minus ``predictions`` (astronomical tide). Hourly-mean
+resampler matches the fine-tune's 1024-step training cadence.
 
-The CO-OPS API is public and unauthenticated. We pull the
-``water_level`` product (observed) and the ``predictions`` product
-(astronomical tide). Surge residual = observed minus predicted.
-
-The fine-tune at ``msradam/Granite-TTM-r2-Battery-Surge`` was trained
-on **hourly-resampled** residual with a 1024-step context and 96-step
-horizon (4 days in, 4 days out). This module exposes a hourly-mean
-resampler so the eval cadence matches the training cadence.
-
-Reference: https://api.tidesandcurrents.noaa.gov/api/prod/
+API: https://api.tidesandcurrents.noaa.gov/api/prod/ (public, no auth).
 """
 
 from __future__ import annotations
@@ -114,23 +107,15 @@ def fetch_window(
 
 @dataclass
 class _ZeroForecaster:
-    """Minimal forecaster used when granite-tsfm isn't installed.
-
-    Predicts zero residual everywhere. Lets the live + replay paths return
-    deterministic results without weights, but the eval path is obviously
-    wrong (large MAE) so a reviewer can't mistake it for a measurement.
-    """
+    """Fallback when granite-tsfm isn't installed. Predicts zero residual."""
 
     def predict(self, history: np.ndarray, horizon: int) -> np.ndarray:
         return np.zeros((horizon,), dtype=np.float32)
 
 
 class _TTMForecaster:
-    """Wraps the loaded TinyTimeMixerForPrediction with a simple predict().
-
-    Standardize history (mean / std), feed as ``past_values=(1, T, 1)``,
-    de-standardize the model's prediction. Mirrors the call surface in
-    riprap-nyc/app/live/ttm_forecast.py.
+    """``predict(history, horizon)``: standardize, ``past_values=(1,T,1)``,
+    de-standardize. Same call shape as riprap-nyc/app/live/ttm_forecast.py.
     """
 
     def __init__(self, model, context_length: int, prediction_length: int):

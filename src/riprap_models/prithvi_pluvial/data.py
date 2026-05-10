@@ -1,29 +1,10 @@
-"""Prithvi-EO 2.0 NYC Pluvial: held-out tile loader and model loader.
+"""Prithvi-EO 2.0 NYC Pluvial: held-out tile loader + model loader.
 
-Independent reconstruction of the model card's evaluation. The card's exact
-test split lives on the AMD ROCm training box and isn't published. We
-construct a held-out set from the same primary source (Riprap's 166 baked
-Ida 2021 polygons + matching Sentinel-2 chips from Microsoft Planetary
-Computer) using a deterministic stride that's independent of the card's
-seed=42 random split. See ``docs/PROVENANCE.md``.
-
-Recipe:
-
-  * Positives: every 7th polygon from ``riprap-nyc/data/prithvi_ida_2021.geojson``
-    (24 of 166 polygons). For each polygon, fetch the post-Ida Sentinel-2
-    L2A scene (Sept 4-15 2021) with the lowest cloud cover that
-    intersects the polygon centroid. Read a 224×224 chip in UTM 18N
-    centered on the centroid, with bands B02 B03 B04 B8A B11 B12
-    (Sen1Floods11 schema). Rasterize the polygon as the binary label.
-  * Negatives: 5 clear-sky NYC locations far from any Ida polygon.
-    Same band schema, all-zero label.
-
-This is a reconstruction, not a bit-exact reproduction. The card's
-seed=42 split partitioned 498 chips (166 originals + 332 copy-paste
-augmentations); we partition only the 166 originals at stride 7. Some
-of our 24 positives may have been in the card's train or val sets;
-none are in the card's exact test set with high probability under the
-fresh stride. This trades exact-replay for honest independence.
+Independent reconstruction. Holdout = stride-7 subset of the 166 baked
+Ida 2021 polygons in ``riprap-nyc/data/prithvi_ida_2021.geojson``. For
+each polygon: post-Ida Sentinel-2 L2A chip at 10 m, 224×224 in UTM 18N,
+bands B02 B03 B04 B8A B11 B12 (Sen1Floods11 schema). Plus 5 clear-sky
+NYC negative controls.
 """
 
 from __future__ import annotations

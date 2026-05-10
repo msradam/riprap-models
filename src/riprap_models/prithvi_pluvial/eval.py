@@ -1,14 +1,7 @@
-"""Prithvi-EO 2.0 NYC Pluvial: held-out evaluation and benchmark.
+"""Prithvi-EO 2.0 NYC Pluvial: eval + bench.
 
-Card metric (msradam/Prithvi-EO-2.0-NYC-Pluvial): test flood IoU 0.5979,
-zero-shot baseline IoU around 0.10. We report both, and we deliberately
-include three adversarial tile classes:
-
-  * Ida 2021 footprint (the training-distribution case)
-  * Sandy 2012 (older event, different optics)
-  * non-event control (no flood, must report background)
-
-The split is defined in eval/configs/prithvi_pluvial.yaml.
+Reports chip-wide and polygon-vicinity flood IoU; tile kinds: ida / control.
+Card metric: 0.5979 flood IoU. Holdout config in eval/configs/prithvi_pluvial.yaml.
 """
 
 from __future__ import annotations

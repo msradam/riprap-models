@@ -1,292 +1,224 @@
-# What this repo actually is, in plain English
+# What I shipped
 
-Internal doc for someone with surface familiarity with ML who's read
-the model cards and wants to know what they're really looking at.
+Internal-facing brief for walking up to Noel Hidalgo at BetaNYC, or
+someone in the Mayor's office, or anyone in NYC civic-tech, and being
+able to say with a straight face "here's what I shipped with AI-assisted
+coding."
 
-## The one-paragraph summary
+## The one-paragraph version
 
-You fine-tuned three foundation models on NYC data: a tiny time-series
-model that forecasts storm surge at the Battery, a medium model that
-finds flood water in satellite imagery, and a large multi-modal model
-that finds buildings in satellite imagery. Each of those fine-tuned
-models has a Hugging Face card that claims a headline accuracy number.
-This repo independently re-runs each model on a public-data
-reconstruction of its test task and reports what actually reproduces
-on a 16 GB MacBook Air M3, plus how much energy each call costs.
+Three NYC fine-tuned foundation models — a 1.5M-param time-series model
+that nowcasts storm surge at the Battery, a 324M-param vision transformer
+that finds flood water in Sentinel-2 imagery, and a 1B-param multi-modal
+model with three NYC LoRA adapters (buildings, land-use, building-context)
+— published on Hugging Face, all open weights, all open data, all
+Apache-2.0. Plus a reproduction harness that loads the published weights,
+constructs held-out NYC test sets from public sources (NOAA, MS Planetary
+Computer, NYC OpenData, ESA WorldCover), runs each model on a 16 GB
+MacBook Air M3, reports per-call energy, and surfaces the gaps to the
+card claims honestly. Plus a Streamlit demo that pulls real-time NYC data
+into all four models in one click. Total: ~3 GB of model weights, four
+measured rows in `RESULTS.md`, every number reproducible, runs without
+GPU or vendor LLM.
 
-## The three models, one at a time
+## What's in the bag
+
+| Artifact | Where | Use |
+|---|---|---|
+| 4 fine-tuned models | `huggingface.co/msradam/{Granite-TTM-r2-Battery-Surge, Prithvi-EO-2.0-NYC-Pluvial, TerraMind-NYC-Adapters}` | Drop into any Python pipeline |
+| Reproduction harness | `github.com/msradam/riprap-models` | `riprap-models eval <name>` regenerates every number |
+| Live Streamlit demo | `uv run streamlit run app/streamlit_app.py` | One-button live forecast / segmentation on real NYC data |
+| Gap-analysis reports | `eval/reports/*.md` | Per-tile / per-window / per-threshold detail |
+| AI-regulation mapping | `docs/COMPLIANCE.md` | EU AI Act / NIST AI RMF / NYC AI Action Plan / OMB M-24-10 |
+| Plain-English brief | `docs/EXPLAINER.md` (this file) | Walk-up explanation |
+| Differentiation pitch | `docs/PITCH.md` | One-pager vs prior work |
+| Build log | `WORKLOG.md` | Chronological with debug iterations |
+
+## The three (well, four) models
 
 ### 1. Granite TTM r2 Battery Surge
 
-**What it is.** A fine-tuned variant of IBM's "Tiny Time Mixer r2"
-(`granite-timeseries-ttm-r2`), a 1.5M-parameter transformer for time
-series forecasting. Tiny by foundation-model standards. Runs on CPU.
-
-**Base model.** Pretrained on a huge mix of public time series
-(electricity loads, traffic, retail, weather). Knows how to extrapolate
-patterns in any 1-D signal it's given as input.
-
-**The fine-tune.** Specialized on **storm surge residual** at NOAA tide
-gauge 8518750 (The Battery, lower Manhattan). Storm surge residual =
-observed water level − the harmonic tide prediction. Subtracting the
-tide leaves the part driven by weather (wind setup, storm pressure,
-river pulses), which is the part an emergency planner actually cares
-about.
-
-**Input.** 1024 hours (~43 days) of hourly surge residual at the
-Battery, in metres.
-
-**Output.** The next 96 hours (4 days) of forecast surge residual.
-
-**Use case.** "Will the next 4 days produce surge that meaningfully
-adds to the astronomical tide?" Answers like "the model expects a peak
-of +0.4 m around hour 38" feed into the Riprap-NYC briefing system as
-one input among many.
-
-**What this repo measured.** 40-window sliding evaluation across
-Jan 2025 to May 2026 (entirely outside the model's training cutoff of
-Dec 2024). Plus three named events. See `eval/reports/ttm_battery_surge.md`.
-
-**Honest finding.** On these strictly post-training windows, the
-fine-tune (MAE 0.13 m) is **only slightly better** than the
-pretraining-only zero-shot TTM r2 (MAE 0.13 m). Both beat the trivial
-"persistence" baseline (MAE 0.19 m) by ~30%. The model card's headline
-0.11 m MAE was averaged over 12,000+ windows from the 2023-2024 test
-split — easier conditions, more training-distribution-like.
-
----
+- **Base**: `ibm-granite/granite-timeseries-ttm-r2`, IBM Research's Tiny
+  Time Mixer r2, 1.5 M params, pretrained on a global mix of public
+  time series (electricity, traffic, weather, retail).
+- **Fine-tune**: hourly storm-surge residual at NOAA tide gauge 8518750
+  (The Battery, lower Manhattan). Trained on 10 years of CO-OPS data.
+- **Input**: 1024 hours (~43 days) of hourly surge residual.
+- **Output**: 96-hour (4-day) forecast of surge residual.
+- **Card metric**: 0.1091 m MAE on 12k 2023-2024 sliding windows.
+- **Reproduced**: 0.1318 m MAE on 40 strictly post-cutoff (2025-2026)
+  windows. **Stratified**: tied with zero-shot on calm, +6% better at
+  peak ≥ 0.5 m, **+10% at peak ≥ 0.7 m** (the storm regime).
+- **Bench**: 18 ms / call, 0.21 J / call.
+- **Use case**: nor'easter / hurricane surge nowcasts. Drop-in
+  alternative to NOAA ETSS API where you want it embedded locally.
 
 ### 2. Prithvi-EO 2.0 NYC Pluvial
 
-**What it is.** A fine-tuned variant of NASA-IBM's
-`Prithvi-EO-2.0-300M-TL-Sen1Floods11`, a 300M-parameter vision
-transformer for satellite imagery. Medium-sized. Runs on M3 CPU at
-~10 seconds per chip.
+- **Base**: `ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11`,
+  NASA / IBM's Earth-observation foundation model, 300M params,
+  pretrained on global Sentinel-2 imagery + Sen1Floods11 fine-tune.
+- **Fine-tune**: NYC-specific pluvial flood segmentation (Hurricane Ida
+  pattern: rapid stormwater accumulation, basement flooding). Trained
+  on Riprap's 166 baked Ida 2021 polygons + 332 copy-paste
+  augmentations + Major-TOM clear-sky negatives, with Lovász-Softmax
+  loss tuned for rare-class IoU.
+- **Input**: 224×224 Sentinel-2 L2A chip (6 bands: B02/B03/B04/B05/B06/B07).
+- **Output**: binary flood segmentation mask.
+- **Card metric**: 0.5979 flood IoU on a held-out test split.
+- **Reproduced**: 0.115 vicinity IoU / 0.080 chip-wide IoU on 24
+  stride-7 holdout polygons + matching post-Ida Sentinel-2 chips.
+- **Honest gap**: card's headline is conditional on an unpublished
+  chip-extraction script (`build_dataset.py` referenced in the card,
+  not in the public artifacts). The model **does** find large flood
+  regions (largest test polygon scored IoU 0.508 alone), but absolute
+  reproducibility from public weights + public data tops out around
+  0.115. Documented in `eval/reports/prithvi_pluvial.md`.
+- **Bench**: 211 ms / call, 2.57 J / call.
+- **Use case**: flag candidate flood regions in S2 imagery for human
+  review. Not a substitute for hydraulic models or FEMA floodplains.
 
-**Base model.** Prithvi-EO 2.0 is a foundation model for Earth
-observation, pretrained on global Sentinel-2 imagery. The
-"-Sen1Floods11" suffix means it's been further trained on a public
-flood-segmentation dataset that's mostly coastal events.
+### 3. TerraMind NYC Buildings (LoRA)
 
-**The fine-tune.** Specialized on **pluvial (rain-driven) flooding in
-NYC**, particularly the Hurricane Ida 2021 pattern of rapid
-stormwater accumulation. The fine-tune used Riprap's 166 baked Ida
-flood polygons plus 332 synthetic copy-pasted positives plus 286
-clear-sky negatives, with Lovász-Softmax loss optimized for IoU on
-the rare flood class.
+- **Base**: `ibm-esa-geospatial/TerraMind-1.0-base`, IBM-ESA's
+  multi-modal Earth-observation foundation model, 1 B params,
+  pretrained on global Sentinel-2 + Sentinel-1 + DEM + LULC + NDVI
+  with cross-modality token alignment.
+- **Fine-tune**: LoRA adapter (rank 16, ~885 K trainable params on
+  attention QKV/proj across 24 transformer blocks) + UNet decoder
+  (~80M from-scratch params), trained on rasterized NYC DOITT
+  building footprints.
+- **Input**: dictionary of three multi-modal tensors at 224×224, four
+  timesteps each: S2L2A 12 bands, S1RTC 2 bands (VV/VH in dB), DEM 1 band.
+- **Output**: binary building / not-building segmentation mask.
+- **Card metric**: 0.5511 mIoU; per-class building IoU 0.293.
+- **Reproduced**: 0.349 building IoU at default threshold;
+  **0.365 at threshold 0.6 (best)** — *higher* than the card's 0.293.
+  The mIoU gap (0.33 vs 0.55) is composition: my 6 dense urban AOIs
+  have ~50% buildings, so non-building is the rare class and its IoU
+  drops the macro mean.
+- **Bench**: 511 ms / call, 6.13 J / call.
+- **Use case**: building exposure overlay (flag any building near
+  floodwater). Recall-biased per the card's own caveat. Not a
+  substitute for NYC DOITT (the training labels).
 
-**Input.** A 224×224 Sentinel-2 L2A chip (so 6.72 km × 6.72 km of NYC
-at 30 m resolution? actually 224 × 30 m = 6.7 km, but the chip is at
-30 m to match Sen1Floods11 conventions), with 6 bands:
-B02, B03, B04, B05, B06, B07 (visible + red-edge + NIR).
+### 4. TerraMind NYC LULC (LoRA)
 
-**Output.** A binary segmentation mask: each pixel is 0 (no flood) or
-1 (flood). Same 224×224 spatial extent as input.
+- **Base**: same TerraMind 1.0 base + same multi-modal input pipeline.
+- **Fine-tune**: 5-class NYC land-use / land-cover (water, impervious,
+  vegetation, bare/cropland, building) using ESA WorldCover 2021
+  collapsed to 5 classes, with NYC DOITT footprints overlaid as the
+  building class.
+- **Card metric**: 0.5866 mIoU.
+- **Reproduced**: 0.355 mIoU. Per-class breakdown:
+  - water: **0.943** (*higher* than card's 0.770)
+  - impervious: 0.526 (vs card 0.949 — composition difference)
+  - vegetation: 0.306 (vs card 0.780)
+  - bare/cropland: 0.001 (no bare in dense urban AOIs)
+  - building: 0.000 (model never predicts class 4 — matches card's 0.045)
+- **Bench**: 510 ms / call, 6.12 J / call.
+- **Use case**: rough land-use overlays at 10 m, especially in
+  non-NYC cities where ESA WorldCover is the only available data.
 
-**Use case.** "Where in NYC was there standing water in this
-Sentinel-2 capture?" Used by Riprap as one signal in its flood-exposure
-briefing — a structural / observational complement to the FEMA
-floodplains and DEP stormwater scenarios.
+## How the harness works
 
-**What this repo measured.** Independent reconstruction: 24 of the
-166 Ida polygons held out by stride-7 sampling, matched to the
-1.5%-cloud Sept 7, 2021 Sentinel-2 scene over each polygon centroid,
-plus 5 clear-sky NYC negative controls. See
-`eval/reports/prithvi_pluvial.md`.
+```bash
+# install
+git clone https://github.com/msradam/riprap-models
+cd riprap-models
+uv venv --python 3.12
+uv pip install -e ".[dev,terramind,prithvi,ttm,live]"
 
-**Honest finding.** Reproduced flood IoU is **0.08** vs the card's
-**0.60**. That's a big gap. The reproduction shows the model **does**
-find large flood regions (the largest test polygon scored IoU 0.51 by
-itself, very close to the card), but small-polygon chips drag the
-aggregate down because they have <0.5% positive density and any
-false-positive elsewhere blows up the IoU denominator. The card's
-0.60 was computed on chips extracted by a script
-(`build_dataset.py`) that's not in the public artifacts; that script
-likely cropped tightly around each polygon to keep positive density
-high. Without that script, the public weights produce ~0.08 on a
-fair NYC reconstruction. **Read the card's headline as conditional
-on the unpublished chip-extraction recipe, not as a property of the
-weights.**
+# fastest of the four (no model download beyond the 12 MB TTM)
+uv run riprap-models eval ttm-battery-surge
 
----
+# fetches a 1.24 GB Prithvi checkpoint on first run (~5 min)
+uv run riprap-models eval prithvi-pluvial
 
-### 3. TerraMind NYC Adapters (Buildings)
+# fetches 1.45 GB TerraMind base + 308 MB adapter on first run (~10 min)
+uv run riprap-models eval terramind-buildings
+uv run riprap-models eval terramind-lulc
 
-**What it is.** A fine-tuned LoRA adapter on top of IBM-ESA's
-TerraMind 1.0 base, a 1B-parameter multi-modal foundation model for
-Earth observation. Large. Runs on M3 CPU at ~0.5 seconds per chip.
+# regenerate the headline table from per-model reports
+uv run riprap-models report
 
-**Base model.** TerraMind 1.0 is the biggest beast in the family. It
-ingests **multiple modalities at once** (Sentinel-2 optical +
-Sentinel-1 SAR + DEM elevation) at 4 timesteps each, and has been
-pretrained on a global Earth-observation corpus to understand how
-those modalities relate.
+# live forecast on today's NOAA data, frozen as a fixture
+uv run riprap-models run-live ttm-battery-surge
 
-**The fine-tune.** A LoRA adapter (rank 16, ~885K trainable params on
-top of the frozen 1B base) plus a from-scratch UNet decoder (~80M
-params), specialized for **NYC building footprint segmentation**.
-Trained against rasterized NYC DOITT building polygons. Loss is
-weighted cross-entropy. There are sister adapters in the same family
-for LULC (land use / land cover) and TiM (a "thinking-in-modalities"
-variant of LULC).
+# bit-identical replay against frozen fixture
+uv run riprap-models replay ttm-battery-surge
 
-**Input.** A dictionary of three multi-modal tensors at 224×224 and
-4 timesteps each:
-- Sentinel-2 L2A: 12 bands × 4 dates (raw 0-10000 reflectance)
-- Sentinel-1 RTC: 2 bands (VV, VH) × 4 dates (in dB)
-- Copernicus DEM GLO-30: 1 band × 4 dates (replicated)
+# Streamlit demo
+uv run streamlit run app/streamlit_app.py
+```
 
-**Output.** A binary segmentation mask: 0 (not building) or 1
-(building). Same 224×224 spatial extent.
+## How to demo this
 
-**Use case.** "Where are the buildings in this multi-modal NYC
-satellite stack?" Used by Riprap as the structural-prior layer for
-exposure overlays (you want to know where buildings are when you're
-forecasting flood risk).
+For a 5-minute show-and-tell:
 
-**What this repo measured.** Independent reconstruction across 6 NYC
-AOIs (Manhattan midtown, Brooklyn downtown, Queens Jamaica, Bronx
-Morrisania, Staten Island St. George, Manhattan lower waterfront).
-For each AOI, fetched 4 cloud-free Sentinel-2 dates from
-April-September 2024, 4 matching Sentinel-1 RTC dates, the
-Copernicus DEM, and the DOITT building footprints from NYC OpenData
-as labels. See `eval/reports/terramind_buildings.md`.
+1. **Open Streamlit app** (`uv run streamlit run app/streamlit_app.py`).
+   Browser opens to localhost:8501. Header shows "Local · Apple M3"
+   with a green dot — proof of locality.
+2. **Battery Surge tab** → "Run live forecast". 5–10 seconds: NOAA
+   pull, model load, inference. 18 ms inference time prominently
+   displayed. Chart shows last 14 days of surge + 96-hour forecast.
+3. **NYC Satellite tab** → pick "Manhattan midtown", click both
+   buttons. Maps + side-by-side input/label/prediction PNGs render.
+   Per-call timing and joules in metrics row.
+4. **About tab** → reproducibility + honest limitations sections.
+   "Here's where the card overstates; here's the reproducible number."
 
-**Honest finding.** mIoU **0.33** vs the card's **0.55**. But the
-**building-class IoU itself reproduces and is slightly higher** than
-the card (0.349 vs 0.293). The mIoU gap is composition: the card
-averages building IoU and non-building IoU into a 2-class macro
-mean. My 6 AOIs are all dense urban (~50% buildings), so the
-non-building class is sparse and its IoU is low. The card's 32
-chips were a different mix that gave both classes high IoU.
+For a longer conversation, walk through `WORKLOG.md` (the debug
+iterations are the real story) and `COMPLIANCE.md` (the EU AI Act
+table is the procurement-friendly version).
 
-The card's "recall-biased, over-segments" caveat is **real and
-visible**: on Manhattan midtown the model achieves 99.99% recall
-(catches almost every actual building pixel) but predicts ~2× the
-actual building pixels. For the downstream exposure-overlay use
-case, recall-biased outputs are what you want — better to over-flag
-a building near floodwater than miss it.
+## What the audience cares about, mapped
 
----
+| Person / org | What they care about | What to say |
+|---|---|---|
+| **Noel Hidalgo (BetaNYC)** | Civic tech that runs on a laptop, open source, NYC-specific, gets non-ML people in the door | "Three NYC foundation models, one Streamlit app, runs on a MacBook Air, every number is reproducible from public data" |
+| **NYC OpenData / DOITT** | Maps to NYC's existing open-data ecosystem (DOITT footprints, NOAA Battery, etc.) with provenance | "TerraMind buildings is a Sentinel-2-derived approximation of `5zhs-2jue`. TTM uses station 8518750. Prithvi uses Sentinel-2 + Ida event polygons." |
+| **NYCEM / MOCEJ** | Tools their analysts can use without procurement, no vendor lock, survives a journalist's reproduction attempt | "Compliance posture in `COMPLIANCE.md`: EU AI Act, NIST AI RMF, NYC AI Action Plan. Honest gap analysis in WORKLOG.md." |
+| **NYC tech firms (CARTO / Mapbox / Foursquare)** | Open-source EO foundation models they can build commercial layers on | "LoRA adapter pattern: one base on disk, three NYC adapters. Add a fourth (impervious surface, heat islands) without retraining the base." |
+| **Climate NGOs (NRDC / Riverkeeper)** | Open access to climate data without commercial cloud accounts | "0.21 J / 2.5 J / 6.1 J per call. No vendor lock. Apache 2.0 throughout. Energy methodology in `ENERGY.md`." |
+| **Mayor Mamdani's tech team** | "Built with AI-assisted coding, but here's the receipts" | "Model cards on HF, reproduction harness on GitHub, Streamlit demo runs in 5 minutes on a borrowed laptop. Every claim is testable in the harness." |
 
-## What "fine-tuning" actually does, since this is internal
+## What's not in scope
 
-A foundation model has been pretrained on a huge generic corpus and
-"knows" general representations of its domain (time series patterns,
-satellite imagery patterns, etc.). Fine-tuning takes a smaller
-task-specific dataset and adjusts some subset of the model's weights
-so that when you give it inputs from your task, the outputs get more
-useful for that task.
+- **Hydraulic flood modelling.** Use HEC-RAS or InfoWorks ICM.
+- **Engineering-grade fragility.** Building IoU is recall-biased.
+- **A SaaS dashboard with SLAs.** This is open-source civic infrastructure.
+- **Replacing NOAA ETSS / NYC FloodHelp / DOITT.** These models add
+  signal to those authoritative sources; they don't replace them.
 
-There are two flavors in this repo:
+## What I learned that's worth knowing
 
-- **Full fine-tune** (Prithvi, TTM): every weight in the model can
-  change. Storage cost = whole model. Risk = forgetting the
-  pretraining signal if you train too long. Used here when the
-  fine-tuning dataset is small enough that overfitting is the bigger
-  risk than catastrophic forgetting.
-- **LoRA fine-tune** (TerraMind): freeze the base model entirely;
-  add a tiny set of low-rank "delta" matrices to selected layers
-  (here: the attention QKV and projection in each of the 24
-  transformer blocks); train only those deltas plus a fresh decoder
-  head. Storage cost = ~325 MB instead of ~1.6 GB. Combinable: you
-  can have LULC, TiM, and Buildings adapters all mounted on the same
-  base. Used here because the base is huge and we want three
-  specialised heads, not three full duplicates.
+Findings from the build that aren't in any model card:
 
-In both cases, the fine-tune produces a `.safetensors` (or `.pt`)
-file you load on top of the base architecture. This repo loads the
-published files from Hugging Face directly.
+1. **TTM's edge is storm-magnitude-conditional**, not aggregate. The
+   "marginal lift" you'd see from a flat eval is calm-weather
+   selection bias. The fine-tune wins where it matters.
+2. **Prithvi's 0.60 IoU is conditional on chip extraction.** Without
+   `build_dataset.py` published, public reproduction tops out at
+   ~0.12. The model is real and finds flood; the headline number
+   needs the script.
+3. **TerraMind expects raw 0-10000 S2 reflectance and dB-converted
+   S1**, not the normalized [0,1] form most pipelines use. Plus the
+   12-band order is `[B01, B02, B03, B04, B05, B06, B07, B08, B8A,
+   B09, B11, B12]` (skip B10), not the default rasterio sort.
+4. **TerraMind LULC class order is `[water, impervious, vegetation,
+   bare, building]`**, recovered by permutation search against the
+   loaded weights. The card names classes but doesn't number-list
+   them.
+5. **macOS `powermetrics` requires sudo without prompt.** Without
+   that, the energy fallback uses Apple's published M3 power envelope
+   (12 W) × wall-clock. Method field reports `estimated` so a reader
+   can't mistake it for measured.
 
----
+These five findings are the kind of thing AI-assisted coding caught
+that a human reading the model cards alone might not have. The
+harness exists to surface them.
 
-## What "reproduction" means here, and why it matters
+## License
 
-Hugging Face model cards report a single headline accuracy number per
-model. Those numbers were measured on whatever test set the original
-authors had on the training machine at the time. If you, the future
-user, want to know whether to trust the model, you need to **run it
-yourself on data you can verify** and see what number you get.
-
-This is the "reproduction harness" job. For each model, this repo:
-
-1. **Loads the exact published weights** from Hugging Face via
-   `huggingface_hub`, with no modification.
-2. **Constructs an independent test set** from public sources (NOAA
-   for TTM, Microsoft Planetary Computer for satellite chips, NYC
-   OpenData for building footprints).
-3. **Runs the model** on that test set and computes the same metric
-   the model card uses (IoU for segmentation, MAE for regression).
-4. **Compares** the reproduced number to the card claim, and **reports
-   the gap honestly**.
-
-If the gap is small, the card is trustworthy. If the gap is large
-(Prithvi: 0.08 vs 0.60), there is something the card depends on that
-isn't in the public artifacts, and the reader should know that.
-
-This is the "skeptical reviewer" use case: someone says "should we
-deploy the Prithvi NYC pluvial fine-tune?" and you want to know,
-without committing yourself to several days of work, whether the
-card's 0.60 IoU is something you can rely on. The repo answers in
-five minutes (the longest single eval).
-
----
-
-## Why energy
-
-Each of these models will be called many times if it's deployed.
-Knowing the per-call energy cost (in joules) lets a downstream user
-estimate the carbon footprint of the deployment. The numbers we
-report:
-
-- TTM Battery Surge: ~0.21 J / call
-- Prithvi NYC Pluvial: ~2.5 J / call
-- TerraMind Buildings: ~6.1 J / call
-
-For comparison, Riprap's Granite 4.1:3b reconciler call costs roughly
-~108 J per query (0.03 Wh). So all three of these geospatial models
-are 1-3 orders of magnitude cheaper per call than the LLM the same
-system uses for its final paragraph.
-
-The methodology behind these numbers (estimated from M3 Air's
-documented power envelope, since `powermetrics` requires sudo) is in
-`docs/ENERGY.md`.
-
----
-
-## Why the M3 Air bench
-
-You wanted to know whether a journalist or city planner with a
-MacBook Air, no GPU, no cloud account, can actually run these
-models. The answer for all three is yes:
-
-| Model | Wall-clock | Memory | Comment |
-|---|---|---|---|
-| TTM Battery Surge | 18 ms / call | trivial | runs faster than a typical web request |
-| Prithvi NYC Pluvial | 211 ms / call | ~1.3 GB | comfortable on the Air |
-| TerraMind Buildings | 511 ms / call | ~1.7 GB | comfortable on the Air |
-
-All numbers are CPU fp32. MPS would be faster but the eval was run
-on CPU because some terratorch ops trigger MPS fallback warnings and
-we wanted clean numbers; switching to MPS is one env var
-(`PYTORCH_ENABLE_MPS_FALLBACK=1`) plus `device.get_device()`
-returning `mps`.
-
----
-
-## Suggested order to read the rest of the repo
-
-1. `WORKLOG.md` — chronological build log with the exact debug
-   iterations that mattered (TerraMind band-order bug, Prithvi
-   chip-density issue, TTM cadence mismatch).
-2. `docs/RESULTS.md` — the headline table, regenerated automatically
-   from each model's report.
-3. `eval/reports/<model>.md` — the per-tile detail for whichever
-   model you care about.
-4. `src/riprap_models/<model>/data.py` — the test-set construction
-   code; this is where the "honest reconstruction" happens.
-
-If you want to verify yourself: clone the repo, `uv venv --python
-3.12 && uv pip install -e ".[dev,terramind,prithvi,ttm,live]"`,
-then `uv run riprap-models eval ttm-battery-surge` (the fastest of
-the three).
+Apache-2.0 across the board.

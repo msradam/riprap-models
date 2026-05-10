@@ -1,20 +1,17 @@
 """Regenerate ``docs/RESULTS.md`` from per-model markdown reports.
 
-Each report under ``eval/reports/<model>.md`` is parsed for a single
-fenced YAML block tagged ``measurements`` that looks like:
+Each ``eval/reports/<model>.md`` must contain a fenced YAML block:
 
     ```yaml measurements
-    model: TerraMind Buildings
-    card_metric: "0.5511 mIoU"
-    reproduced: "0.5478 mIoU"
-    method: "held-out NYC tiles, n=N"
-    m3: "yes (mps fp16)"
-    j_per_call: "1.34 J (estimated, darwin-arm64)"
+    model: ...
+    card_metric: "..."
+    reproduced: "..."
+    method: "..."
+    m3: "..."
+    j_per_call: "..."
     ```
 
-We aggregate those into the headline table at the top of RESULTS.md.
-Reports without a measurements block are listed in a "Pending" section
-so a missing report is visible.
+Reports without the block appear in a "Pending" section.
 """
 
 from __future__ import annotations

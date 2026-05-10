@@ -1,23 +1,8 @@
-"""Segmentation and regression metrics matched to the model cards.
+"""Segmentation + regression metrics.
 
-The TerraMind and Prithvi segmentation work uses the standard semantic-
-segmentation IoU family. The TTM regression task uses MAE and RMSE on
-water-level residuals.
-
-Definitions are pinned here so the eval modules can never quietly drift
-from the model-card definitions.
-
-  IoU per class:  TP / (TP + FP + FN), with predictions and labels both
-                  taken at argmax. ``ignore_index`` pixels are excluded
-                  from TP/FP/FN entirely.
-  mIoU:           Mean of per-class IoU. We expose both ``micro`` (sum
-                  TP/FP/FN globally then divide) and ``macro`` (average
-                  per-class IoU) because Prithvi-EO 2.0 reports the
-                  macro form on its model card and TerraMind reports the
-                  per-class IoU directly.
-  MAE / RMSE:     On the surge residual in metres. Persistence baseline
-                  is computed by holding the last observed value flat
-                  across the forecast horizon.
+  IoU per class:  TP / (TP + FP + FN); ``ignore_index`` excluded entirely.
+  mIoU:           ``macro`` = mean of per-class IoU; ``micro`` = sum-TP / (sum-TP + sum-FP + sum-FN).
+  MAE / RMSE:     On surge residual (m). Persistence = last observed value held flat.
 """
 
 from __future__ import annotations

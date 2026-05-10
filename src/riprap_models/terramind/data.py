@@ -1,22 +1,10 @@
-"""TerraMind NYC Buildings adapter: held-out tile loader and model loader.
+"""TerraMind NYC adapters: tile loader + model loader.
 
-Independent reconstruction. The card's published 32-chip test split names
-Major-TOM Core chips (`nyc_452U_625L_r0c0` style); we don't have the
-Major-TOM chip extractor in the public artifacts, so this harness builds
-its own held-out NYC test set:
-
-  * 6 NYC AOIs (Manhattan, Brooklyn, Queens, Bronx, SI, plus a downtown
-    waterfront chip that mixes water + dense buildings).
-  * For each AOI, a 224×224 chip at 10 m / pixel, centered on the AOI.
-  * Multi-modal input: S2L2A (12 bands × 4 timesteps) + S1RTC (2 bands ×
-    4 timesteps) + DEM (1 band × 4 timesteps via repeat). All fetched
-    from Microsoft Planetary Computer.
-  * Label: NYC DOITT building footprints (`5zhs-2jue` on NYC OpenData)
-    fetched per chip via the Socrata REST API and rasterized to the
-    chip grid.
-
-This trades exact-replay of the card's 32 chips for an honest
-independent reproduction over the same task.
+6 NYC AOIs, 224×224 chips at 10 m in UTM 18N. Inputs: Sentinel-2 L2A
+(12 bands × 4 timesteps), Sentinel-1 RTC (2 bands × 4 timesteps),
+Copernicus DEM GLO-30 (1 band × 4). Labels: NYC DOITT footprints
+(buildings adapter) or ESA WorldCover + DOITT overlay (LULC adapter).
+All sources public, no auth.
 """
 
 from __future__ import annotations
@@ -47,9 +35,7 @@ S1_STDS = [4.391, 4.459]
 DEM_MEAN = 670.665
 DEM_STD = 951.272
 
-# Six NYC AOIs. Chosen to cover varied building density, surface types, and
-# water-vs-land mixes so the eval surfaces over- and under-segmentation
-# behaviour. Lon/lat are chip centres; each chip is 2240 × 2240 m at 10 m.
+# Chip centres in lon/lat. Each chip is 2240 × 2240 m at 10 m.
 NYC_AOIS: list[tuple[str, float, float]] = [
     ("manhattan_midtown", -73.984, 40.755),
     ("brooklyn_downtown", -73.989, 40.692),
@@ -270,12 +256,24 @@ def _fetch_doitt_label(left, bottom, right, top, dst_crs, chip_transform):
 
 
 def load_buildings_adapter(cfg: dict | None = None):
-    """Load TerraMind 1.0 base + NYC buildings LoRA + decoder head.
+    """Backwards-compatible alias: load the buildings adapter (2 classes)."""
+    cfg = dict(cfg) if cfg else {}
+    cfg.setdefault("adapter_dir", "buildings_nyc")
+    cfg.setdefault("num_classes", 2)
+    return load_terramind_adapter(cfg)
+
+
+def load_terramind_adapter(cfg: dict | None = None):
+    """Load TerraMind 1.0 base + the requested NYC LoRA + decoder head.
 
     Returns ``(model_callable, preprocess_fn, num_classes)``. The model
     accepts a dict with ``S2L2A``, ``S1RTC``, ``DEM`` torch tensors of
     shape ``[1, C, T, H, W]``. The preprocess function converts numpy
     inputs to that dict.
+
+    cfg keys:
+      adapter_dir: one of buildings_nyc / lulc_nyc / tim_nyc
+      num_classes: must match the adapter (2 buildings, 5 lulc, 5 tim)
     """
     import torch
     from huggingface_hub import hf_hub_download
@@ -286,6 +284,7 @@ def load_buildings_adapter(cfg: dict | None = None):
     base_id = cfg.get("base_id", "ibm-esa-geospatial/TerraMind-1.0-base")
     adapters_id = cfg.get("model_id", "msradam/TerraMind-NYC-Adapters")
     adapter_dir = cfg.get("adapter_dir", "buildings_nyc")
+    num_classes = int(cfg.get("num_classes", 2))
 
     task = SemanticSegmentationTask(
         model_factory="EncoderDecoderFactory",
@@ -300,9 +299,10 @@ def load_buildings_adapter(cfg: dict | None = None):
                 {"name": "LearnedInterpolateToPyramidal"},
             ],
             decoder="UNetDecoder", decoder_channels=[512, 256, 128, 64],
-            head_dropout=0.1, num_classes=2,
+            head_dropout=0.1, num_classes=num_classes,
         ),
-        loss="ce", ignore_index=-1, class_weights=[0.6, 1.6],
+        loss="ce", ignore_index=-1,
+        class_weights=cfg.get("class_weights", [1.0] * num_classes),
     )
     base_p = hf_hub_download(base_id, "TerraMind_v1_base.pt")
     base_sd = torch.load(base_p, map_location="cpu", weights_only=False)
@@ -371,7 +371,140 @@ def load_buildings_adapter(cfg: dict | None = None):
         def parameters(self):
             return self.m.parameters()
 
-    return _Wrap(task.model), preprocess, 2
+    return _Wrap(task.model), preprocess, num_classes
+
+
+# ---------- LULC labels (ESA WorldCover 2021 + NYC DOITT building overlay) ----
+
+# ESA WorldCover 2021 → NYC 5-class collapse. Class order matches what the
+# LULC adapter actually predicts (recovered by permutation search against
+# the loaded weights — the published model card doesn't number-list the
+# classes explicitly, just names them):
+#   0 Water                  ← ESA 80 (Permanent water), 90 (Wetland)
+#   1 Impervious / urban     ← ESA 50 (Built-up) MINUS DOITT polygons
+#   2 Vegetation             ← ESA 10 (Tree), 20 (Shrub), 30 (Grass)
+#   3 Bare / cropland        ← ESA 40 (Crop), 60 (Bare), 70 (Snow), 95 (Mangrove), 100 (Moss)
+#   4 Building (LULC scope)  ← NYC DOITT footprints OVERWRITE ESA built-up
+ESA_TO_NYC5: dict[int, int] = {
+    80: 0, 90: 0,
+    50: 1,
+    10: 2, 20: 2, 30: 2,
+    40: 3, 60: 3, 70: 3, 95: 3, 100: 3,
+    0: 3,  # nodata → bare-ish (rare in NYC)
+}
+LULC_CLASS_NAMES = {0: "water", 1: "impervious", 2: "vegetation",
+                    3: "bare/cropland", 4: "building"}
+
+
+def iter_lulc_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
+    tuple[str, dict, np.ndarray, str]
+]:
+    """Same chip-fetching path as buildings, but with ESA WorldCover +
+    DOITT building overlay as the 5-class label.
+    """
+    try:
+        import planetary_computer  # noqa: F401
+        import pystac_client
+        import rasterio  # noqa: F401
+    except ImportError as e:
+        warnings.warn(f"terramind data extras missing: {e}", stacklevel=2)
+        return
+
+    aois = cfg.get("aois", NYC_AOIS)
+    if limit is not None:
+        aois = aois[:limit]
+    cat = pystac_client.Client.open(
+        "https://planetarycomputer.microsoft.com/api/stac/v1",
+        modifier=__import__("planetary_computer").sign_inplace,
+    )
+    s2_window = cfg.get("s2_window", "2024-04-01/2024-09-30")
+    s1_window = cfg.get("s1_window", "2024-04-01/2024-09-30")
+    max_cloud = cfg.get("max_cloud", 20)
+
+    for name, lon, lat in aois:
+        try:
+            inputs, _ = _build_chip(cat, lon, lat, s2_window, s1_window, max_cloud)
+            if inputs is None:
+                continue
+            label = _build_lulc_label(cat, lon, lat)
+            yield f"nyc_{name}", inputs, label, "nyc"
+        except Exception as e:
+            warnings.warn(f"failed AOI {name}: {e!r}", stacklevel=2)
+            continue
+
+
+def _build_lulc_label(cat, lon: float, lat: float) -> np.ndarray:
+    """Fetch ESA WorldCover 2021 over the chip and rasterize NYC DOITT
+    building polygons on top. Returns 224×224 int64.
+    """
+    import planetary_computer
+    import rasterio
+    from pyproj import Transformer
+    from rasterio.features import rasterize as rio_rasterize
+    from rasterio.transform import from_origin
+    from rasterio.vrt import WarpedVRT
+    from rasterio.warp import transform as rio_transform
+    from shapely.geometry import shape as shp_shape
+    from shapely.ops import transform as shp_transform
+
+    dst_crs = "EPSG:32618"
+    xs, ys = rio_transform("EPSG:4326", dst_crs, [lon], [lat])
+    cx, cy = xs[0], ys[0]
+    half = TILE_SIZE * 5
+    left, top = cx - half, cy + half
+    chip_transform = from_origin(left, top, 10.0, 10.0)
+
+    # ESA WorldCover, 2021 v200 preferred
+    search = cat.search(
+        collections=["esa-worldcover"],
+        intersects={"type": "Point", "coordinates": [lon, lat]},
+        max_items=2,
+    )
+    items = sorted(search.items(), key=lambda it: it.id, reverse=True)  # 2021 > 2020
+    if not items:
+        return np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
+    item = planetary_computer.sign(items[0])
+    asset = item.assets["map"]
+
+    with rasterio.open(asset.href) as src:
+        with WarpedVRT(
+            src, crs=dst_crs, transform=chip_transform,
+            width=TILE_SIZE, height=TILE_SIZE,
+            resampling=rasterio.enums.Resampling.nearest,
+        ) as vrt:
+            esa = vrt.read(1)
+
+    label = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
+    for esa_val, nyc_cls in ESA_TO_NYC5.items():
+        label[esa == esa_val] = nyc_cls
+
+    # Overlay DOITT building footprints as class 4
+    where = (
+        f"within_box(the_geom, {lat + 0.025}, {lon - 0.025}, {lat - 0.025}, {lon + 0.025})"
+    )
+    params = {"$where": where, "$limit": 50000, "$select": "the_geom"}
+    try:
+        rows = requests.get(NYC_BUILDINGS_API, params=params, timeout=60).json()
+    except Exception:
+        rows = []
+    if rows:
+        tx_fwd = Transformer.from_crs("EPSG:4326", dst_crs, always_xy=True).transform
+        shapes = []
+        for row in rows:
+            g = row.get("the_geom")
+            if not g:
+                continue
+            try:
+                shapes.append((shp_transform(tx_fwd, shp_shape(g)), 4))
+            except Exception:
+                continue
+        if shapes:
+            bld_mask = rio_rasterize(
+                shapes, out_shape=(TILE_SIZE, TILE_SIZE),
+                transform=chip_transform, fill=0, dtype="uint8",
+            )
+            label[bld_mask > 0] = 4
+    return label
 
 
 def dummy_input(h: int = TILE_SIZE, w: int = TILE_SIZE) -> dict:

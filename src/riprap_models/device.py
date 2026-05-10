@@ -1,16 +1,7 @@
 """Device + dtype selection.
 
-A single ``get_device()`` entry point so every model loader picks the same
-device under the same rules. Order: CUDA, then MPS (Apple Silicon), then CPU.
-
-dtype rules:
-  * cuda  → float16
-  * mps   → float16 (most ops; some Prithvi/TerraMind layers need fp32 fallback)
-  * cpu   → float32
-
-We keep this tiny on purpose. Anything model-specific (e.g. an MPS op that
-requires ``PYTORCH_ENABLE_MPS_FALLBACK=1``) belongs in the model's eval module
-and gets documented in ``docs/M3_NOTES.md``.
+``get_device()`` returns ``(kind, dtype, label)``. Order: CUDA, MPS, CPU.
+Dtype: float16 on cuda/mps, float32 on cpu.
 """
 
 from __future__ import annotations
