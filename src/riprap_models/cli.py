@@ -4,6 +4,7 @@ Subcommands:
 
   riprap-models eval <name>      run held-out eval, write a markdown report
   riprap-models bench <name>     run energy + latency benchmark
+  riprap-models probe            run 10 sniff-test cases per model on real data
   riprap-models run-live <name>  fetch live NYC data, run inference, freeze fixture
   riprap-models replay <name>    replay against a previously frozen fixture
   riprap-models report           regenerate docs/RESULTS.md from eval/reports/
@@ -126,6 +127,28 @@ def report() -> None:
 
     out = regenerate_results(REPORTS_DIR, Path("docs/RESULTS.md"))
     click.echo(f"wrote {out}")
+
+
+@main.command()
+def probe() -> None:
+    """Run 10 sniff-test cases per model on real public data.
+
+    Asserts each output falls in a sensible qualitative range. Writes
+    eval/reports/probe.md with pass/fail per case.
+    """
+    import subprocess
+    import sys
+
+    script = Path(__file__).parent.parent.parent.parent / "scripts" / "probe.py"
+    if not script.exists():
+        # When installed, the scripts/ dir lives alongside src/, so fall back to repo-root.
+        script = Path("scripts/probe.py")
+    if not script.exists():
+        raise click.UsageError(
+            "scripts/probe.py not found. Run from a clone of "
+            "github.com/msradam/riprap-models."
+        )
+    subprocess.check_call([sys.executable, str(script)])
 
 
 if __name__ == "__main__":

@@ -1,9 +1,19 @@
-# riprap-models
+# riprap-models (meta repo)
 
-Three NYC fine-tuned foundation models, plus a reproduction harness that
-loads the published weights, runs them on a 16 GB MacBook Air M3 against
-real public data, and reports per-call energy. All open weights, all open
-data, Apache-2.0 throughout.
+The meta / reproduction-harness / live-demo repo tying together three
+NYC fine-tuned foundation models and the parent
+[riprap-nyc](https://github.com/msradam/riprap-nyc) system.
+
+| Model | GitHub home (1:1 with HF) | Hugging Face |
+|---|---|---|
+| Granite TTM r2 Battery Surge | [github.com/msradam/Granite-TTM-r2-Battery-Surge](https://github.com/msradam/Granite-TTM-r2-Battery-Surge) | [hf.co/msradam/Granite-TTM-r2-Battery-Surge](https://huggingface.co/msradam/Granite-TTM-r2-Battery-Surge) |
+| Prithvi-EO 2.0 NYC Pluvial | [github.com/msradam/Prithvi-EO-2.0-NYC-Pluvial](https://github.com/msradam/Prithvi-EO-2.0-NYC-Pluvial) | [hf.co/msradam/Prithvi-EO-2.0-NYC-Pluvial](https://huggingface.co/msradam/Prithvi-EO-2.0-NYC-Pluvial) |
+| TerraMind NYC Adapters | [github.com/msradam/TerraMind-NYC-Adapters](https://github.com/msradam/TerraMind-NYC-Adapters) | [hf.co/msradam/TerraMind-NYC-Adapters](https://huggingface.co/msradam/TerraMind-NYC-Adapters) |
+
+This repo holds: the unified Streamlit demo, the cross-model probe
+harness (`scripts/probe.py`), the unified RESULTS table, the AI-regulation
+compliance posture, and the `docs/TRAINING.md` survey of how all four
+fine-tunes were actually trained.
 
 **38 of 40 sniff-test cases pass against real public data**
 (`eval/reports/probe.md`). The 2 exceptions are TTM at non-Battery NOAA
@@ -103,6 +113,7 @@ docs/
   PITCH.md                    one-pager differentiation vs prior work
   RESULTS.md                  headline reproduction table (regenerated)
   COMPLIANCE.md               EU AI Act / NIST AI RMF / NYC AI Action Plan
+  TRAINING.md                 cross-model survey of how the fine-tunes were trained
   METHODOLOGY.md              how we measure, what's in scope
   PROVENANCE.md               tile IDs, station IDs, holdout construction
   ENERGY.md                   per-platform energy methodology
