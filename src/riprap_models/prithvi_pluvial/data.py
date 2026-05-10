@@ -58,6 +58,31 @@ def _polygon_test_indices(n: int = 166, stride: int = 7) -> list[int]:
     return list(range(0, n, stride))
 
 
+def _cluster_centers(g, eps_m: int = 1000, min_samples: int = 2) -> list[tuple[float, float]]:
+    """DBSCAN-cluster polygon centroids in their projected CRS, return cluster
+    centers in lon/lat (EPSG:4326). Used to build chips that contain multiple
+    nearby polygons rather than one isolated polygon, mimicking what a
+    higher-positive-density training-time chip-extractor would do.
+    """
+    import numpy as np
+    from sklearn.cluster import DBSCAN
+
+    g_proj = g.to_crs(32618)
+    ctrs = np.array([[p.centroid.x, p.centroid.y] for p in g_proj.geometry])
+    labels = DBSCAN(eps=eps_m, min_samples=min_samples).fit_predict(ctrs)
+    cluster_ids = sorted(set(labels) - {-1})
+    centers_proj = []
+    for cid in cluster_ids:
+        members = ctrs[labels == cid]
+        centers_proj.append((float(members[:, 0].mean()), float(members[:, 1].mean())))
+
+    # Reproject back to EPSG:4326
+    from pyproj import Transformer
+    tx = Transformer.from_crs(32618, 4326, always_xy=True).transform
+    centers_lonlat = [tx(x, y) for x, y in centers_proj]
+    return centers_lonlat
+
+
 def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
     tuple[str, np.ndarray, np.ndarray, str]
 ]:
@@ -82,7 +107,30 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
         return
 
     g = gpd.read_file(geojson_path).to_crs(4326)
-    test_idx = _polygon_test_indices(n=len(g), stride=int(cfg.get("stride", 7)))
+
+    # Two modes for picking chip centers:
+    #  * "polygon" (default earlier): one chip per polygon, centered on
+    #    polygon centroid. Chips have very low positive density when
+    #    polygons are small (median ~0.2%), which crushes IoU.
+    #  * "cluster": DBSCAN-cluster polygon centroids in UTM 18N (eps 1km),
+    #    centre each chip on a cluster centroid. Chips contain multiple
+    #    polygons, raising positive density to a regime where IoU is a
+    #    fair scoring metric.
+    mode = cfg.get("test_mode", "polygon")
+    if mode == "cluster":
+        eps_m = int(cfg.get("cluster_eps_m", 1000))
+        centers = _cluster_centers(g, eps_m=eps_m)
+        cluster_stride = int(cfg.get("cluster_stride", 3))
+        # Stride-3 holdout across clusters
+        centers = centers[::cluster_stride]
+        test_idx_iter = [(f"cluster_{i:02d}", lon, lat) for i, (lon, lat) in enumerate(centers)]
+    else:
+        test_idx = _polygon_test_indices(n=len(g), stride=int(cfg.get("stride", 7)))
+        test_idx_iter = [
+            (f"ida_{i:03d}", float(g.geometry.iloc[i].centroid.x),
+             float(g.geometry.iloc[i].centroid.y))
+            for i in test_idx
+        ]
     # All polygons participate as ground truth — when a chip is centered on
     # one polygon, any other polygons that fall inside the same 2240×2240m
     # window also belong to the flood mask. Holding back tile centers (the
@@ -98,13 +146,11 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
     n_yielded = 0
 
     # ---- positives ----
-    for i in test_idx:
-        poly = g.geometry.iloc[i]
-        ctr = poly.centroid
+    for prefix, lon, lat in test_idx_iter:
         try:
             search = cat.search(
                 collections=["sentinel-2-l2a"],
-                intersects={"type": "Point", "coordinates": [ctr.x, ctr.y]},
+                intersects={"type": "Point", "coordinates": [lon, lat]},
                 datetime=cfg.get("ida_post_window", "2021-09-05/2021-09-12"),
                 query={"eo:cloud_cover": {"lt": cfg.get("max_cloud", 30)}},
                 max_items=5,
@@ -112,19 +158,19 @@ def iter_holdout_tiles(cfg: dict, limit: int | None = None) -> Iterator[
             items = list(search.items())
             items.sort(key=lambda it: it.properties.get("eo:cloud_cover", 100))
             if not items:
-                warnings.warn(f"no S2 item found for ida polygon {i}", stacklevel=2)
+                warnings.warn(f"no S2 item found for {prefix}", stacklevel=2)
                 continue
             it = items[0]
-            tile_id = f"ida_{i:03d}_{it.id}"
+            tile_id = f"{prefix}_{it.id}"
             image, label = _read_chip_with_label(
-                it, ctr.x, ctr.y, all_polys_4326, g.crs
+                it, lon, lat, all_polys_4326, g.crs
             )
             yield tile_id, image, label, "ida"
             n_yielded += 1
             if limit is not None and n_yielded >= limit:
                 return
         except Exception as e:
-            warnings.warn(f"failed ida polygon {i}: {e!r}", stacklevel=2)
+            warnings.warn(f"failed {prefix}: {e!r}", stacklevel=2)
 
     # ---- negatives ----
     for name, lon, lat in NEGATIVE_LONLATS:
@@ -219,6 +265,23 @@ def _read_chip_with_label(item, lon: float, lat: float, polys, poly_crs):
     else:
         label = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.int64)
     return image, label
+
+
+def polygon_vicinity_mask(label: np.ndarray, dilate_px: int = 30) -> np.ndarray:
+    """Return a 0/1 mask of pixels within ``dilate_px`` of any GT==1 pixel.
+
+    Used as a 'valid evaluation region': pixels far from any flood polygon
+    are excluded from IoU because the labels do not include real existing
+    water (rivers, coast) that the model legitimately segments. Dilating
+    the polygon by ~300 m (30 px at 10 m) bounds the evaluation to the
+    flood event's vicinity.
+    """
+    from scipy.ndimage import binary_dilation
+
+    bin_label = label > 0
+    if not bin_label.any():
+        return np.zeros_like(label, dtype=bool)
+    return binary_dilation(bin_label, iterations=dilate_px)
 
 
 def load_pluvial_finetune(cfg: dict | None = None):

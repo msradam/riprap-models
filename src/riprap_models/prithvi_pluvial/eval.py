@@ -55,9 +55,10 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
     import torch
 
     from ..common.metrics import confusion_matrix, iou_from_confusion
-    from .data import load_pluvial_finetune
+    from .data import load_pluvial_finetune, polygon_vicinity_mask
 
     model, preprocess, num_classes = load_pluvial_finetune(cfg)
+    vicinity_dilate_px = int(cfg.get("vicinity_dilate_px", 30))
 
     # Zero-shot baseline: same backbone, same head shape, but the
     # Sen1Floods11 base weights instead of the NYC fine-tune. Lets a
@@ -67,6 +68,8 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
 
     cm_ft = np.zeros((num_classes, num_classes), dtype=np.int64)
     cm_zs = np.zeros((num_classes, num_classes), dtype=np.int64) if zeroshot_model else None
+    cm_ft_vicinity = np.zeros((num_classes, num_classes), dtype=np.int64)
+    cm_zs_vicinity = np.zeros((num_classes, num_classes), dtype=np.int64) if zeroshot_model else None
     n_tiles = 0
     per_tile_rows: list[dict] = []
     by_kind_ft: dict[str, list[float]] = {"ida": [], "sandy": [], "control": []}
@@ -78,6 +81,17 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
         with torch.no_grad():
             pred_ft = model(x).argmax(dim=1).squeeze(0).cpu().numpy()
         cm_ft += confusion_matrix(pred_ft, label, num_classes=num_classes, ignore_index=255)
+
+        # Polygon-vicinity scoring: only count pixels within dilate_px of any GT==1.
+        # Excludes "real existing water" (rivers, coast) that the labels do not cover.
+        if (label == 1).any():
+            vmask = polygon_vicinity_mask(label, dilate_px=vicinity_dilate_px)
+            ft_v = pred_ft.copy()
+            ft_v[~vmask] = 0
+            lab_v = label.copy()
+            lab_v[~vmask] = 0
+            cm_ft_vicinity += confusion_matrix(ft_v, lab_v, num_classes=num_classes, ignore_index=255)
+
         ft_iou = _flood_iou(pred_ft, label)
         if kind in by_kind_ft and not np.isnan(ft_iou):
             by_kind_ft[kind].append(ft_iou)
@@ -86,6 +100,13 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
             with torch.no_grad():
                 pred_zs = zeroshot_model(x).argmax(dim=1).squeeze(0).cpu().numpy()
             cm_zs += confusion_matrix(pred_zs, label, num_classes=num_classes, ignore_index=255)
+            if (label == 1).any():
+                vmask = polygon_vicinity_mask(label, dilate_px=vicinity_dilate_px)
+                zs_v = pred_zs.copy()
+                zs_v[~vmask] = 0
+                lab_v = label.copy()
+                lab_v[~vmask] = 0
+                cm_zs_vicinity += confusion_matrix(zs_v, lab_v, num_classes=num_classes, ignore_index=255)
             zs_iou = _flood_iou(pred_zs, label)
             if kind in by_kind_zs and not np.isnan(zs_iou):
                 by_kind_zs[kind].append(zs_iou)
@@ -100,11 +121,15 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
     iou_ft = iou_from_confusion(cm_ft)
     flood_ft = iou_ft.get(1, float("nan"))
     flood_zs = iou_from_confusion(cm_zs).get(1, float("nan")) if cm_zs is not None else float("nan")
+    flood_ft_v = iou_from_confusion(cm_ft_vicinity).get(1, float("nan"))
+    flood_zs_v = iou_from_confusion(cm_zs_vicinity).get(1, float("nan")) if cm_zs_vicinity is not None else float("nan")
 
     prov = record(MODEL_ID, model_revision=cfg.get("model_revision"), inputs=[{"tile_id": t} for t in tile_ids])
     _write_measured_report(
         out,
         flood_iou_ft=flood_ft, flood_iou_zs=flood_zs,
+        flood_iou_ft_vicinity=flood_ft_v, flood_iou_zs_vicinity=flood_zs_v,
+        vicinity_dilate_px=vicinity_dilate_px,
         per_class_iou=iou_ft,
         by_kind_ft=by_kind_ft, by_kind_zs=by_kind_zs,
         per_tile=per_tile_rows,
@@ -247,6 +272,8 @@ def _write_skipped_report(path: Path, reason: str) -> None:
 
 def _write_measured_report(
     path: Path, flood_iou_ft: float, flood_iou_zs: float,
+    flood_iou_ft_vicinity: float, flood_iou_zs_vicinity: float,
+    vicinity_dilate_px: int,
     per_class_iou: dict, by_kind_ft: dict, by_kind_zs: dict,
     per_tile: list[dict], n_tiles: int, prov: dict,
 ) -> None:
@@ -287,11 +314,21 @@ def _write_measured_report(
         "post-Ida window 2021-09-05 to 2021-09-12, plus 5 clear-sky NYC negative controls.\n"
         "All polygons within each 224×224 chip's footprint contribute to ground truth.\n\n"
         "## Held-out evaluation (micro IoU on flood class)\n\n"
+        f"### Chip-wide IoU (every pixel scored)\n\n"
         f"- tiles: {n_tiles}\n"
         f"- fine-tune flood IoU: {flood_iou_ft:.4f}\n"
         f"- zero-shot Sen1Floods11 base IoU: {flood_iou_zs:.4f}\n"
         f"{gap_text}\n"
-        f"- per-class IoU (fine-tune):\n{pc_lines}\n\n"
+        f"### Polygon-vicinity IoU (only pixels within {vicinity_dilate_px}px ≈ {vicinity_dilate_px*10}m of any GT polygon)\n\n"
+        f"- fine-tune flood IoU: {flood_iou_ft_vicinity:.4f}\n"
+        f"- zero-shot Sen1Floods11 base IoU: {flood_iou_zs_vicinity:.4f}\n\n"
+        "Why two scoring modes: the Ida polygons label *new* water from Hurricane "
+        "Ida only, not pre-existing rivers / coast / harbour. The model legitimately "
+        "segments those existing water bodies, so chip-wide IoU is biased downward "
+        "by labels that don't include them. Vicinity IoU restricts scoring to within "
+        f"{vicinity_dilate_px*10}m of any actual flood polygon, where the labels are "
+        "complete.\n\n"
+        f"- per-class IoU (fine-tune, chip-wide):\n{pc_lines}\n\n"
         "## By tile kind\n\n"
         + "\n".join(by_lines) + "\n\n"
         "## Per-tile detail\n\n"
@@ -318,7 +355,7 @@ def _write_measured_report(
         "```yaml measurements\n"
         "model: Prithvi-EO 2.0 NYC Pluvial\n"
         'card_metric: "0.5979 flood IoU"\n'
-        f'reproduced: "{flood_iou_ft:.4f} flood IoU (gap: card chip-extraction not public)"\n'
+        f'reproduced: "{flood_iou_ft:.4f} chip-wide / {flood_iou_ft_vicinity:.4f} vicinity flood IoU"\n'
         f'method: "stride-7 reconstruction, n={n_tiles}, 24 ida + 5 control"\n'
         'm3: "yes (cpu fp32, 324M params, ~10s/tile)"\n'
         'j_per_call: "see Benchmark section"\n'

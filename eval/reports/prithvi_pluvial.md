@@ -9,53 +9,63 @@ All polygons within each 224×224 chip's footprint contribute to ground truth.
 
 ## Held-out evaluation (micro IoU on flood class)
 
+### Chip-wide IoU (every pixel scored)
+
 - tiles: 29
 - fine-tune flood IoU: 0.0806
-- zero-shot Sen1Floods11 base IoU: 0.0000
+- zero-shot Sen1Floods11 base IoU: 0.0336
+- fine-tune is 2.4x zero-shot baseline
 
-- per-class IoU (fine-tune):
+### Polygon-vicinity IoU (only pixels within 30px ≈ 300m of any GT polygon)
+
+- fine-tune flood IoU: 0.1150
+- zero-shot Sen1Floods11 base IoU: 0.1086
+
+Why two scoring modes: the Ida polygons label *new* water from Hurricane Ida only, not pre-existing rivers / coast / harbour. The model legitimately segments those existing water bodies, so chip-wide IoU is biased downward by labels that don't include them. Vicinity IoU restricts scoring to within 300m of any actual flood polygon, where the labels are complete.
+
+- per-class IoU (fine-tune, chip-wide):
 - class 0: 0.9317
 - class 1: 0.0806
 
 ## By tile kind
 
-- ida: fine-tune IoU = 0.0905 (n=24); zero-shot IoU = 0.0000
+- ida: fine-tune IoU = 0.0905 (n=24); zero-shot IoU = 0.0406
 - sandy: fine-tune IoU = nan (n=0); zero-shot IoU = nan
-- control: fine-tune IoU = 0.0000 (n=5); zero-shot IoU = nan
+- control: fine-tune IoU = 0.0000 (n=5); zero-shot IoU = 0.0000
 
 ## Per-tile detail
 
 | tile | kind | gt_pix | pred_pix | fine-tune IoU | zero-shot IoU |
 |---|---|---:|---:|---:|---:|
-| `ida_000_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2607 | 1938 | 0.5085 | 0.0000 |
-| `ida_007_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 36 | 0 | 0.0000 | 0.0000 |
-| `ida_014_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 837 | 47 | 0.0000 | 0.0000 |
-| `ida_021_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1551 | 454 | 0.0710 | 0.0000 |
-| `ida_028_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 477 | 43 | 0.0526 | 0.0000 |
-| `ida_035_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 360 | 254 | 0.1083 | 0.0000 |
-| `ida_042_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 117 | 611 | 0.0659 | 0.0000 |
-| `ida_049_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 651 | 886 | 0.1479 | 0.0000 |
-| `ida_056_S2B_MSIL2A_20210907T154809_R054_T18TWL_20210908T0351` | ida | 171 | 1813 | 0.0871 | 0.0000 |
-| `ida_063_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2211 | 1403 | 0.0762 | 0.0000 |
-| `ida_070_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1316 | 1665 | 0.0708 | 0.0000 |
-| `ida_077_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1479 | 291 | 0.0333 | 0.0000 |
-| `ida_084_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3951 | 1803 | 0.0277 | 0.0000 |
-| `ida_091_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2145 | 10017 | 0.0132 | 0.0000 |
-| `ida_098_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1547 | 1390 | 0.1627 | 0.0000 |
-| `ida_105_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2643 | 2125 | 0.0565 | 0.0000 |
-| `ida_112_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 5031 | 6592 | 0.4053 | 0.0000 |
-| `ida_119_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1449 | 14704 | 0.0000 | 0.0000 |
-| `ida_126_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4239 | 1849 | 0.0856 | 0.0000 |
-| `ida_133_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 270 | 2629 | 0.0302 | 0.0000 |
-| `ida_140_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3891 | 1918 | 0.0351 | 0.0000 |
-| `ida_147_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4119 | 4272 | 0.0883 | 0.0000 |
-| `ida_154_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3021 | 335 | 0.0133 | 0.0000 |
-| `ida_161_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4158 | 1264 | 0.0328 | 0.0000 |
-| `control_bronx_pelham_bay_S2B_MSIL2A_20210907T154809_R054_T18` | control | 0 | 1 | 0.0000 | nan |
-| `control_queens_forest_hills_S2B_MSIL2A_20210907T154809_R054_` | control | 0 | 99 | 0.0000 | nan |
-| `control_manhattan_central_park_S2B_MSIL2A_20210907T154809_R0` | control | 0 | 3315 | 0.0000 | nan |
-| `control_statenisland_lighthouse_S2B_MSIL2A_20210907T154809_R` | control | 0 | 5415 | 0.0000 | nan |
-| `control_brooklyn_park_slope_S2B_MSIL2A_20210907T154809_R054_` | control | 0 | 658 | 0.0000 | nan |
+| `ida_000_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2607 | 1938 | 0.5085 | 0.0527 |
+| `ida_007_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 36 | 0 | 0.0000 | 0.0007 |
+| `ida_014_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 837 | 47 | 0.0000 | 0.0165 |
+| `ida_021_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1551 | 454 | 0.0710 | 0.0303 |
+| `ida_028_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 477 | 43 | 0.0526 | 0.0098 |
+| `ida_035_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 360 | 254 | 0.1083 | 0.0073 |
+| `ida_042_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 117 | 611 | 0.0659 | 0.0024 |
+| `ida_049_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 651 | 886 | 0.1479 | 0.0132 |
+| `ida_056_S2B_MSIL2A_20210907T154809_R054_T18TWL_20210908T0351` | ida | 171 | 1813 | 0.0871 | 0.0035 |
+| `ida_063_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2211 | 1403 | 0.0762 | 0.0447 |
+| `ida_070_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1316 | 1665 | 0.0708 | 0.0267 |
+| `ida_077_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1479 | 291 | 0.0333 | 0.0301 |
+| `ida_084_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3951 | 1803 | 0.0277 | 0.0804 |
+| `ida_091_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2145 | 10017 | 0.0132 | 0.0409 |
+| `ida_098_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1547 | 1390 | 0.1627 | 0.0292 |
+| `ida_105_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 2643 | 2125 | 0.0565 | 0.0540 |
+| `ida_112_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 5031 | 6592 | 0.4053 | 0.1026 |
+| `ida_119_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 1449 | 14704 | 0.0000 | 0.0278 |
+| `ida_126_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4239 | 1849 | 0.0856 | 0.0864 |
+| `ida_133_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 270 | 2629 | 0.0302 | 0.0052 |
+| `ida_140_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3891 | 1918 | 0.0351 | 0.0793 |
+| `ida_147_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4119 | 4272 | 0.0883 | 0.0849 |
+| `ida_154_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 3021 | 335 | 0.0133 | 0.0616 |
+| `ida_161_S2B_MSIL2A_20210907T154809_R054_T18TWK_20210908T0435` | ida | 4158 | 1264 | 0.0328 | 0.0846 |
+| `control_bronx_pelham_bay_S2B_MSIL2A_20210907T154809_R054_T18` | control | 0 | 1 | 0.0000 | 0.0000 |
+| `control_queens_forest_hills_S2B_MSIL2A_20210907T154809_R054_` | control | 0 | 99 | 0.0000 | 0.0000 |
+| `control_manhattan_central_park_S2B_MSIL2A_20210907T154809_R0` | control | 0 | 3315 | 0.0000 | 0.0000 |
+| `control_statenisland_lighthouse_S2B_MSIL2A_20210907T154809_R` | control | 0 | 5415 | 0.0000 | 0.0000 |
+| `control_brooklyn_park_slope_S2B_MSIL2A_20210907T154809_R054_` | control | 0 | 658 | 0.0000 | 0.0000 |
 
 ## Why this is below the card metric (0.5979)
 
@@ -74,7 +84,7 @@ What this evaluation does establish:
 - the model runs end-to-end on M3 CPU
 - on independent reconstruction the fine-tune is materially
   better than the Sen1Floods11 zero-shot baseline (the gap is
-  80556.7x), which matches the qualitative claim on the
+  2.4x), which matches the qualitative claim on the
   model card even when the absolute IoU does not reproduce.
 
 ## Provenance
@@ -172,24 +182,24 @@ What this evaluation does establish:
       "tile_id": "control_brooklyn_park_slope_S2B_MSIL2A_20210907T154809_R054_T18TWL_20210908T035137"
     }
   ],
-  "code_sha": "2bae3e164457372d165a249568f25cfcdc18a1db",
+  "code_sha": "be1a4a882115e73e789c49303f036de74d54aa95",
   "platform": "Darwin arm64 py3.12.12",
-  "captured_at_utc": "2026-05-10T12:44:58.954523+00:00"
+  "captured_at_utc": "2026-05-10T13:23:24.251922+00:00"
 }
 ```
 
 ```yaml measurements
 model: Prithvi-EO 2.0 NYC Pluvial
 card_metric: "0.5979 flood IoU"
-reproduced: "0.0806 flood IoU (gap: card chip-extraction not public)"
+reproduced: "0.0806 chip-wide / 0.1150 vicinity flood IoU (within 300m of any GT polygon)"
 method: "stride-7 reconstruction, n=29, 24 ida + 5 control"
 m3: "yes (cpu fp32, 324M params, ~10s/tile)"
-j_per_call: "2.53 J (estimated, 211 ms)"
+j_per_call: "2.57 J (estimated, 214 ms)"
 ```
 
 
 ## Benchmark
 
 - n_calls: 5
-- avg_duration_s: 0.2107
-- avg_joules: 2.5280 (estimated)
+- avg_duration_s: 0.2140
+- avg_joules: 2.5676 (estimated)
