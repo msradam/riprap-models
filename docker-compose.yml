@@ -1,0 +1,30 @@
+services:
+  cuda:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: riprap-models:cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./eval/reports:/app/eval/reports
+      - ./eval/fixtures:/app/eval/fixtures
+      - hf-cache:/root/.hf_home
+
+  mps-parity:
+    build:
+      context: .
+      dockerfile: Dockerfile.mps
+    image: riprap-models:mps
+    platform: linux/arm64
+    volumes:
+      - ./eval/reports:/app/eval/reports
+      - ./eval/fixtures:/app/eval/fixtures
+
+volumes:
+  hf-cache:
