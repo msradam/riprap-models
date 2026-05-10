@@ -1,0 +1,48 @@
+name: benchmark
+
+# Heavy benchmark runs are tagged-only. The smoke matrix proves the package
+# loads on macOS-14 (arm64) and Ubuntu; this workflow runs the full eval +
+# energy benchmark when a release tag is pushed.
+
+on:
+  push:
+    tags:
+      - "bench-*"
+  workflow_dispatch:
+
+jobs:
+  bench-mps:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install 3.12
+      - name: Install with all model extras
+        run: |
+          uv venv --python 3.12
+          uv pip install -e ".[dev,terramind,prithvi,ttm,live]"
+      - name: Replay against committed fixtures
+        run: |
+          uv run riprap-models replay terramind-buildings || true
+          uv run riprap-models replay prithvi-pluvial || true
+          uv run riprap-models replay ttm-battery-surge || true
+      - name: Bench (energy + latency)
+        run: |
+          uv run riprap-models bench terramind-buildings || true
+          uv run riprap-models bench prithvi-pluvial || true
+          uv run riprap-models bench ttm-battery-surge || true
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-mps
+          path: eval/reports/
+
+  bench-cuda:
+    runs-on: ubuntu-latest
+    # Self-hosted CUDA runner not configured yet. The job structure is here
+    # so the matrix is obvious to a reviewer; flip `if: false` to `true`
+    # once a runner is wired up.
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "needs self-hosted CUDA runner"
