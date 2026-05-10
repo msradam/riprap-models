@@ -1,0 +1,15 @@
+# Prithvi-EO 2.0 NYC Pluvial held-out config.
+
+model_id: msradam/Prithvi-EO-2.0-NYC-Pluvial
+model_revision: null
+
+# Manifest format: tile_id,image_path,label_path,kind
+# kind ∈ {ida, sandy, control}
+manifest: data/manifests/prithvi_pluvial_holdout.csv
+
+# Sen1Floods11-style fine-tune: 6 bands at 30m (B02 B03 B04 B05 B06 B07).
+bands: [B02, B03, B04, B05, B06, B07]
+
+num_classes: 2          # 0 = no flood, 1 = flood
+ignore_index: 255
+tile_size: 512
