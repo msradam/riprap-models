@@ -1,12 +1,10 @@
-# AI compliance posture
+# AI governance posture
 
-What this repo gives a procurement / legal / risk team for free, mapped to
-the regulations and frameworks that actually apply to municipal and
-public-sector AI deployment in 2026.
-
-This is internal-facing. Not legal advice. The point is: when an
-agency reviewer asks "can we deploy this model?", the answer is in
-this repo, not in slideware.
+How the properties of this repository map to the regulations and
+frameworks that apply to municipal and public-sector AI deployment in
+2026. This document is reference material for procurement, legal, and
+risk teams considering deployment of these models. It is not legal
+advice.
 
 ## Frameworks this aligns to
 

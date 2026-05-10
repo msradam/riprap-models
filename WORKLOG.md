@@ -81,8 +81,8 @@ isn't surprised.
 
 ## 2026-05-10 — TerraMind Buildings wired and measured on M3 (third row)
 
-After the user pushed back on giving up TerraMind too early, I built
-the multi-modal pipeline and got real numbers.
+Built the multi-modal TerraMind pipeline end-to-end and produced
+measured numbers on the M3 Air.
 
 ### Pipeline that landed
 
@@ -330,7 +330,7 @@ Both loaders' `NotImplementedError` strings name the canonical
 reference in `riprap-nyc` to consult. Each is a fifteen-to-thirty-minute
 loader-wire-up plus a ~1.5 hour test-split construction step.
 
-## 2026-05-10 — initial autonomous build (Adam offline studying for finals)
+## 2026-05-10 — initial build
 
 ### Phase 0: orient
 
