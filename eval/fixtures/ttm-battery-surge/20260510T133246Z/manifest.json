@@ -1,0 +1,15 @@
+{
+  "model": "msradam/Granite-TTM-r2-Battery-Surge",
+  "station": "8518750",
+  "history_window": [
+    "2026-03-21T13:32:46.225303+00:00",
+    "2026-05-10T13:32:46.225303+00:00"
+  ],
+  "n_history_hourly": 1214,
+  "context_used": 1024,
+  "forecast_horizon_hours": 96,
+  "forecast_max_residual_m": 0.10166021436452866,
+  "forecast_min_residual_m": 0.028598342090845108,
+  "forecast_peak_abs_residual_m": 0.10166021436452866,
+  "code_sha": "92cd7cdb89e372dcee3e3b56b49a7cab69b1b0e3"
+}

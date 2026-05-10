@@ -53,7 +53,9 @@ def replay(name: str, fixture_dir: str | None) -> Path:
 
 
 def _run_live_ttm(fixtures_dir: Path) -> Path:
-    """Pull last 96 hours of Battery surge residual, forecast next 96 hours."""
+    """Pull last ~50 days of Battery surge residual at hourly cadence
+    (matches the fine-tune's 1024-step context), forecast next 96 hours.
+    """
     from datetime import datetime, timedelta
 
     import numpy as np
@@ -62,26 +64,33 @@ def _run_live_ttm(fixtures_dir: Path) -> Path:
 
     out = _fixture_dir_for("ttm-battery-surge", fixtures_dir)
     end = datetime.now(UTC)
-    begin = end - timedelta(hours=96)
+    begin = end - timedelta(days=50)
 
     ts, res = fetch_residual_series(
         DEFAULT_STATION,
         begin.strftime("%Y%m%d"),
         end.strftime("%Y%m%d"),
+        hourly=True,
     )
 
     np.savez(out / "inputs.npz", timestamps=ts, residual_m=res)
 
-    forecaster = load_finetune({})
-    fc = forecaster.predict(res.astype(np.float32), horizon=96)
+    forecaster = load_finetune({"context_steps": 1024, "horizon_steps": 96})
+    history = res.astype(np.float32)[-1024:]
+    fc = forecaster.predict(history, horizon=96)
     np.savez(out / "outputs.npz", forecast_m=fc)
 
+    import numpy as np
     manifest = {
         "model": "msradam/Granite-TTM-r2-Battery-Surge",
         "station": DEFAULT_STATION,
         "history_window": [begin.isoformat(), end.isoformat()],
-        "n_history": int(res.size),
-        "forecast_horizon": 96,
+        "n_history_hourly": int(res.size),
+        "context_used": int(min(res.size, 1024)),
+        "forecast_horizon_hours": 96,
+        "forecast_max_residual_m": float(np.max(fc)),
+        "forecast_min_residual_m": float(np.min(fc)),
+        "forecast_peak_abs_residual_m": float(np.max(np.abs(fc))),
         "code_sha": code_sha(),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
