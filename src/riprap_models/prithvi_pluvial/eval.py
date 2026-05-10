@@ -57,7 +57,7 @@ def run_eval(config_path: str | None, limit: int | None, reports_dir: Path) -> P
 
     from .data import load_pluvial_finetune
 
-    model, preprocess, num_classes = load_pluvial_finetune()
+    model, preprocess, num_classes = load_pluvial_finetune(cfg)
 
     cm_total = np.zeros((num_classes, num_classes), dtype=np.int64)
     n_tiles = 0
@@ -108,7 +108,7 @@ def run_bench(n_calls: int, reports_dir: Path) -> Path:
 
     from .data import dummy_input, load_pluvial_finetune
 
-    model, preprocess, _ = load_pluvial_finetune()
+    model, preprocess, _ = load_pluvial_finetune({})
     x = preprocess(dummy_input()).unsqueeze(0)
     with torch.no_grad():
         _ = model(x)

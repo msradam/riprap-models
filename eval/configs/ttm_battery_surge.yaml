@@ -23,6 +23,21 @@ station: "8518750"
 context_steps: 1024
 horizon_steps: 96
 
+# Sliding-window evaluation across a long post-training-cutoff range.
+# The training data ended 2024-12-31; the model card uses 2023-2024 as
+# its test split. Anything from 2025-01-01 onwards is strictly outside
+# the training distribution and therefore the cleanest reproduction
+# target. We fetch one contiguous hourly series and step a (context,
+# horizon) window through it with the configured stride.
+sliding_windows:
+  range_start: "20250101"
+  range_end: "20260501"
+  stride_hours: 240   # 10 days between window starts
+  max_windows: 40
+
+# The named windows below are kept for the historical / event-tagged
+# breakdown in the report. They are evaluated in addition to the sliding
+# set, not instead of it.
 holdout_windows:
   # Late-Dec 2024 nor'easter (test-split tail).
   - label: "noreaster_2024_12"
