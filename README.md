@@ -142,6 +142,13 @@ docs/
   [riprap-nyc/data/prithvi_ida_2021.geojson](https://github.com/msradam/riprap-nyc/blob/main/data/prithvi_ida_2021.geojson) (Apache-2.0).
 - Copernicus DEM GLO-30: ESA Copernicus Open Data License.
 
+## AI-assisted authoring
+
+Portions of this repository were drafted with the assistance of large
+language models. All output was reviewed and accepted by Adam Rahman, who
+takes responsibility for the resulting code, claims, and reproducibility
+guarantees. The full disclosure is in [`NOTICE`](NOTICE).
+
 ## License
 
 Apache-2.0. See `LICENSE` and `NOTICE`.
