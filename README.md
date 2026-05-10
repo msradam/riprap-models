@@ -31,6 +31,23 @@ since the model was trained on the Battery only.
 
 Total disk: ~3 GB. Total peak RAM: under 4 GB.
 
+## Sample outputs (real public data, generated on this M3 Air)
+
+TTM forecast on the Hurricane Ida 2021 history window — model correctly
+predicts storm-class peak surge:
+
+![Hurricane Ida forecast](assets/ttm_hurricane_ida_2021.png)
+
+Prithvi pluvial flood detection on the largest Ida 2021 polygon:
+
+![Prithvi Ida largest polygon](assets/prithvi_polygon_01_idx79.png)
+
+TerraMind LULC over Jamaica Bay — model correctly finds 96% water:
+
+![Jamaica Bay LULC](assets/terramind_lulc_jamaica_bay.png)
+
+More demo outputs: see each per-model repo's README.
+
 ## What you can honestly say to a procurement reviewer or a journalist
 
 - **TTM Battery Surge** catches the storms it was trained for. It is
