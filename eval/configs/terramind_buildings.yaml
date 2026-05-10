@@ -1,0 +1,22 @@
+# TerraMind Buildings held-out config.
+#
+# The manifest is a CSV with one tile per line:
+#   tile_id,image_path,label_path
+# image_path can be a local path or an s3:// / https:// URI that rasterio
+# can open via VSI. Label values are 0 (not building) / 1 (building) / 255 (ignore).
+
+model_id: msradam/TerraMind-NYC-Adapters
+adapter: buildings
+model_revision: null   # latest
+
+# Default manifest location. We do not ship rasters in this repo. Build the
+# manifest locally with scripts/build_terramind_holdout.py (TODO) or point
+# at your own.
+manifest: data/manifests/terramind_buildings_holdout.csv
+
+# Bands the adapter expects. Sentinel-2 L2A 10m + 20m bands resampled to 10m.
+bands: [B02, B03, B04, B08, B05, B06, B07, B8A, B11, B12, AOT, WVP]
+
+num_classes: 2
+ignore_index: 255
+tile_size: 224
