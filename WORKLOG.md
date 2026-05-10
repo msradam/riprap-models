@@ -54,14 +54,30 @@ in the card was averaged over twelve thousand windows and reflects
 that scale. This repo's first job is to make the asymmetry visible,
 not to hide it.
 
-### What still isn't wired
+### What still isn't wired (and why I stopped here)
 
 The two satellite loaders (`load_buildings_adapter`,
-`load_pluvial_finetune`) still raise `NotImplementedError`. The
-canonical reference is `riprap-nyc/scripts/run_prithvi_ida.py` for
-Prithvi; for TerraMind, the published model card kwargs need pinning
-against `terratorch>=0.10`. Each is a fifteen to thirty minute job
-on a GPU box.
+`load_pluvial_finetune`) still raise `NotImplementedError`.
+
+Prithvi-EO 2.0 NYC Pluvial: the model card lists 118 test chips at
+`/root/terramind_nyc/prithvi_nyc/data/...` on the AMD ROCm training box.
+Those chips are not published on HF (see the file list at the model
+repo: only `Prithvi_EO_2.0_NYC_Pluvial.safetensors`, the v2 ckpt, the
+phase14 yaml, and the README). Reproducing the headline 0.5979 flood
+IoU exactly therefore needs either the AMD box or a fresh test split
+constructed from `riprap-nyc/data/` (the 166 baked Ida polygons) plus
+matching public Sentinel-2 chips. The latter is the right path; it's
+documented in `eval/configs/prithvi_pluvial.yaml` and `data/README.md`,
+but the construction is a multi-hour job that exceeds today's budget.
+
+TerraMind NYC Adapters: same shape. The repo has 21 siblings (LoRA
+heads, configs) but the held-out NYC tile manifest is not on HF; it
+needs to be reconstructed from public Sentinel-2 + the building
+footprints referenced in `eval/configs/terramind_buildings.yaml`.
+
+Both loaders' `NotImplementedError` strings name the canonical
+reference in `riprap-nyc` to consult. Each is a fifteen-to-thirty-minute
+loader-wire-up plus a ~1.5 hour test-split construction step.
 
 ## 2026-05-10 — initial autonomous build (Adam offline studying for finals)
 
